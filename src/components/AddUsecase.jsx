@@ -17,8 +17,8 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
       name: name.trim(),
       description: description.trim(),
       icon,
-      notify_email: notifyEmail || null,
-      notify_time: notifyTime,
+      notify_email: notifyEmail.trim() || null,
+      notify_time: notifyEmail.trim() ? notifyTime : null,
     }).select().single()
     if (data) onCreated(data)
     setSaving(false)

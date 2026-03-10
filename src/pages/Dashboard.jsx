@@ -14,6 +14,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [todayStats, setTodayStats] = useState({})
+  const [copiedId, setCopiedId] = useState(null)
+
+  const copyOrbitLink = async (ucId, e) => {
+    e.stopPropagation()
+    const link = `${window.location.origin}/usecase/${ucId}`
+    await navigator.clipboard.writeText(link)
+    setCopiedId(ucId)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
 
   useEffect(() => { fetchUsecases() }, [user])
 
@@ -117,6 +126,31 @@ export default function Dashboard() {
       color: '#4a4870',
       fontFamily: 'DM Sans, sans-serif',
     },
+    reminderBadge: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      background: '#2d4a2d',
+      border: '1px solid #3d6a3d',
+      borderRadius: 6,
+      padding: '3px 8px',
+      fontSize: 10,
+      color: '#7dba7d',
+      marginLeft: 8,
+    },
+    copyBtn: {
+      background: 'transparent',
+      border: '1px solid #1e1e32',
+      borderRadius: 8,
+      padding: '6px 10px',
+      fontSize: 12,
+      cursor: 'pointer',
+      color: '#4a4870',
+      fontFamily: 'DM Sans, sans-serif',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
+    },
     emptyState: {
       textAlign: 'center',
       padding: '80px 20px',
@@ -182,7 +216,14 @@ export default function Dashboard() {
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #6c63ff, #9b59b6)', borderRadius: '20px 20px 0 0' }} />
 
                 <div style={s.cardIcon}>{uc.icon}</div>
-                <div style={s.cardName}>{uc.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={s.cardName}>{uc.name}</span>
+                  {uc.notify_email && (
+                    <span style={s.reminderBadge} title={`Reminder: ${uc.notify_time} to ${uc.notify_email}`}>
+                      🔔 {uc.notify_time?.slice(0, 5)}
+                    </span>
+                  )}
+                </div>
                 <div style={s.cardDesc}>{uc.description || 'Daily check-in tracking'}</div>
 
                 <div style={s.cardFooter}>
@@ -190,6 +231,15 @@ export default function Dashboard() {
                     {todayStats[uc.id] ? `✓ ${todayStats[uc.id]} checked today` : '○ Not checked today'}
                   </span>
                   <div style={s.actions}>
+                    <button
+                      style={{ ...s.copyBtn, ...(copiedId === uc.id ? { background: '#1a3a1a', borderColor: '#3d6a3d', color: '#7dba7d' } : {}) }}
+                      onClick={(e) => copyOrbitLink(uc.id, e)}
+                      onMouseEnter={e => { if (copiedId !== uc.id) e.target.style.color = '#6c63ff' }}
+                      onMouseLeave={e => { if (copiedId !== uc.id) e.target.style.color = '#4a4870' }}
+                      title="Copy check-in link"
+                    >
+                      {copiedId === uc.id ? '✓ Copied!' : '🔗'}
+                    </button>
                     <button
                       style={s.actionBtn}
                       onClick={(e) => { e.stopPropagation(); navigate(`/usecase/${uc.id}/stats`) }}

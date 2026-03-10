@@ -34,7 +34,10 @@ export default function Landing() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: name } }
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: `${window.location.origin}/dashboard`
+        }
       })
       if (error) setError(error.message)
       else setMessage('Check your email to confirm your account!')
