@@ -29,15 +29,27 @@ export default function Stats() {
     setItems(its || [])
 
     const days = period === 'week' ? 7 : 30
-    const since = subDays(new Date(), days).toISOString().split('T')[0]
+    const since = format(subDays(new Date(), days), 'yyyy-MM-dd')
 
-    const { data: ens } = await supabase
+    // Only query entries if we have items
+    const itemIds = (its || []).map(i => i.id)
+    if (itemIds.length === 0) {
+      setEntries([])
+      setLoading(false)
+      return
+    }
+
+    const { data: ens, error } = await supabase
       .from('checkin_entries')
       .select('*')
       .eq('user_id', user.id)
-      .in('checklist_item_id', (its || []).map(i => i.id))
+      .in('checklist_item_id', itemIds)
       .gte('date', since)
       .order('date')
+
+    if (error) {
+      console.error('Error fetching entries:', error)
+    }
 
     setEntries(ens || [])
     setLoading(false)
@@ -51,18 +63,23 @@ export default function Stats() {
   }
 
   // Build chart data: completion % per day
-  const days = period === 'week' ? 7 : 30
-  const dateRange = eachDayOfInterval({ start: subDays(new Date(), days - 1), end: new Date() })
+  const numDays = period === 'week' ? 7 : 30
+  const dateRange = eachDayOfInterval({ start: subDays(new Date(), numDays - 1), end: new Date() })
   const chartData = dateRange.map(d => {
     const dateStr = format(d, 'yyyy-MM-dd')
-    const dayEntries = entries.filter(e => e.date === dateStr)
+    // Compare dates as strings in yyyy-MM-dd format
+    const dayEntries = entries.filter(e => {
+      const entryDate = typeof e.date === 'string' ? e.date.split('T')[0] : format(new Date(e.date), 'yyyy-MM-dd')
+      return entryDate === dateStr
+    })
     const completed = dayEntries.filter(e => {
       if (e.value === 'true') return true
-      if (e.value && e.value !== 'false' && e.value !== '0') return true
+      if (e.value && e.value !== 'false' && e.value !== '0' && e.value !== '') return true
       return false
     }).length
     return {
       date: format(d, period === 'week' ? 'EEE' : 'MMM d'),
+      fullDate: dateStr,
       completion: items.length > 0 ? Math.round((completed / items.length) * 100) : 0,
       entries: dayEntries.length,
     }
@@ -74,13 +91,13 @@ export default function Stats() {
     const total = itemEntries.length
     if (item.value_type === 'checkbox') {
       const done = itemEntries.filter(e => e.value === 'true').length
-      return { ...item, stat: `${done}/${days} days`, pct: days > 0 ? Math.round((done / days) * 100) : 0 }
+      return { ...item, stat: `${done}/${numDays} days`, pct: numDays > 0 ? Math.round((done / numDays) * 100) : 0 }
     }
     if (item.value_type === 'score') {
       const avg = total > 0 ? (itemEntries.reduce((a, e) => a + Number(e.value), 0) / total).toFixed(1) : 'N/A'
       return { ...item, stat: `Avg: ${avg}/10`, pct: avg !== 'N/A' ? Math.round((avg / 10) * 100) : 0 }
     }
-    return { ...item, stat: `${total} entries`, pct: Math.round((total / days) * 100) }
+    return { ...item, stat: `${total} entries`, pct: Math.round((total / numDays) * 100) }
   })
 
   const s = {

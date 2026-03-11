@@ -7,9 +7,12 @@ const ORBITS = [
   { emoji: '👴', label: "Dad's Health" },
   { emoji: '👧', label: "Kids Routine" },
   { emoji: '💼', label: "Career Growth" },
-  { emoji: '🧘', label: "Mindfulness" },
-  { emoji: '💪', label: "Fitness" },
-  { emoji: '📚', label: "Learning" },
+]
+
+const HOW_IT_WORKS = [
+  { step: '1', icon: '🎯', title: 'Create Orbits', desc: 'Set up areas of life you want to track' },
+  { step: '2', icon: '✓', title: 'Daily Check-in', desc: '30 seconds to log your progress' },
+  { step: '3', icon: '📊', title: 'See Patterns', desc: 'AI finds trends and suggests actions' },
 ]
 
 export default function Landing() {
@@ -120,6 +123,60 @@ export default function Landing() {
       alignItems: 'center',
       gap: 8,
     },
+    howSection: {
+      marginTop: 40,
+      paddingTop: 32,
+      borderTop: '1px solid #1a1a2e',
+    },
+    howTitle: {
+      fontSize: 11,
+      color: '#3a3858',
+      letterSpacing: '1.5px',
+      textTransform: 'uppercase',
+      marginBottom: 20,
+    },
+    howGrid: {
+      display: 'flex',
+      gap: 20,
+    },
+    howCard: {
+      flex: 1,
+      background: '#0d0d1a',
+      border: '1px solid #1a1a2e',
+      borderRadius: 14,
+      padding: '20px 16px',
+      textAlign: 'center',
+    },
+    howStep: {
+      width: 28,
+      height: 28,
+      borderRadius: '50%',
+      background: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: 700,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    howIcon: {
+      fontSize: 24,
+      marginBottom: 8,
+      display: 'block',
+    },
+    howCardTitle: {
+      fontFamily: 'Syne, sans-serif',
+      fontSize: 14,
+      fontWeight: 700,
+      color: '#e8e4f0',
+      marginBottom: 4,
+    },
+    howCardDesc: {
+      fontSize: 12,
+      color: '#4a4870',
+      lineHeight: 1.4,
+    },
     form: { width: '100%', maxWidth: 400 },
     formTitle: {
       fontFamily: 'Syne, sans-serif',
@@ -187,12 +244,12 @@ export default function Landing() {
 
         <div>
           <h1 style={s.headline}>
-            Track every<br />
-            orbit of<br />
-            <span style={{ color: '#6c63ff' }}>your life.</span>
+            Track what<br />
+            matters<br />
+            <span style={{ color: '#6c63ff' }}>most.</span>
           </h1>
           <p style={s.subline}>
-            Daily check-ins for the things that matter most — family health, career, kids, wellness. AI-powered insights, weekly trends, and gentle reminders.
+            Create orbits for different areas of your life. Check in daily. Get AI insights on your patterns.
           </p>
           <div style={s.orbitGrid}>
             {ORBITS.map(o => (
@@ -201,6 +258,20 @@ export default function Landing() {
                 <span>{o.label}</span>
               </div>
             ))}
+          </div>
+
+          <div style={s.howSection}>
+            <div style={s.howTitle}>How it works</div>
+            <div style={s.howGrid}>
+              {HOW_IT_WORKS.map(h => (
+                <div key={h.step} style={s.howCard}>
+                  <span style={s.howStep}>{h.step}</span>
+                  <span style={s.howIcon}>{h.icon}</span>
+                  <div style={s.howCardTitle}>{h.title}</div>
+                  <div style={s.howCardDesc}>{h.desc}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
