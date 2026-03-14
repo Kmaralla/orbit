@@ -2,23 +2,37 @@ import { createContext, useContext, useState, useEffect } from 'react'
 
 const ThemeContext = createContext()
 
-export const themes = {
-  dark: {
-    name: 'dark',
-    bg: '#080810',
-    bgCard: '#0d0d1a',
-    bgInput: '#0a0a16',
-    border: '#1a1a2e',
-    borderLight: '#2a2a40',
-    accent: '#6c63ff',
-    accentGradient: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
-    text: '#e8e4f0',
-    textMuted: '#4a4870',
-    textDim: '#2a2840',
-  },
-  light: {
+// Background color options
+export const bgColors = [
+  { key: 'default', label: 'Default', dark: '#080810', light: '#faf8f5' },
+  { key: 'purple', label: 'Purple', dark: '#0f0818', light: '#f5f0fa' },
+  { key: 'blue', label: 'Blue', dark: '#080f18', light: '#f0f5fa' },
+  { key: 'pink', label: 'Pink', dark: '#180810', light: '#faf0f5' },
+  { key: 'green', label: 'Green', dark: '#081810', light: '#f0faf5' },
+]
+
+export const getThemeColors = (mode, bgKey = 'default') => {
+  const bgOption = bgColors.find(b => b.key === bgKey) || bgColors[0]
+  const bg = mode === 'dark' ? bgOption.dark : bgOption.light
+
+  if (mode === 'dark') {
+    return {
+      name: 'dark',
+      bg,
+      bgCard: '#0d0d1a',
+      bgInput: '#0a0a16',
+      border: '#1a1a2e',
+      borderLight: '#2a2a40',
+      accent: '#6c63ff',
+      accentGradient: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
+      text: '#e8e4f0',
+      textMuted: '#8a86a0',
+      textDim: '#4a4860',
+    }
+  }
+  return {
     name: 'light',
-    bg: '#faf8f5',
+    bg,
     bgCard: '#ffffff',
     bgInput: '#f5f3f0',
     border: '#e8e4df',
@@ -26,8 +40,8 @@ export const themes = {
     accent: '#6c63ff',
     accentGradient: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
     text: '#1a1a2e',
-    textMuted: '#6a6878',
-    textDim: '#9a98a8',
+    textMuted: '#5a5868',
+    textDim: '#8a88a0',
   }
 }
 
@@ -39,18 +53,29 @@ export function ThemeProvider({ children }) {
     return 'dark'
   })
 
+  const [bgColor, setBgColor] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('orbit-bg') || 'default'
+    }
+    return 'default'
+  })
+
   useEffect(() => {
     localStorage.setItem('orbit-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('orbit-bg', bgColor)
+  }, [bgColor])
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark')
   }
 
-  const colors = themes[theme]
+  const colors = getThemeColors(theme, bgColor)
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, colors, toggleTheme, bgColor, setBgColor, bgColors }}>
       {children}
     </ThemeContext.Provider>
   )

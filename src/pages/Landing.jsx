@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { useTheme } from '../hooks/useTheme'
+import { useTheme, bgColors } from '../hooks/useTheme'
 
 const ORBITS = [
   { emoji: '👴', label: "Dad's Health" },
@@ -11,14 +11,14 @@ const ORBITS = [
 ]
 
 const HOW_IT_WORKS = [
-  { step: '1', icon: '🎯', title: 'Create Orbits', desc: 'Set up areas of life you want to track' },
-  { step: '2', icon: '✓', title: 'Daily Check-in', desc: '30 seconds to log your progress' },
-  { step: '3', icon: '📊', title: 'See Patterns', desc: 'AI finds trends and suggests actions' },
+  { step: '1', icon: '🎯', title: 'Create Orbits', desc: 'Set up areas you want to track' },
+  { step: '2', icon: '✓', title: 'Daily Check-in', desc: '30 seconds to log progress' },
+  { step: '3', icon: '📊', title: 'See Patterns', desc: 'AI finds trends & actions' },
 ]
 
 export default function Landing() {
   const { user } = useAuth()
-  const { colors, theme, toggleTheme } = useTheme()
+  const { colors, theme, toggleTheme, bgColor, setBgColor } = useTheme()
   const navigate = useNavigate()
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -28,6 +28,7 @@ export default function Landing() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [isMobile, setIsMobile] = useState(false)
+  const [showColors, setShowColors] = useState(false)
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
@@ -66,171 +67,243 @@ export default function Landing() {
     page: {
       minHeight: '100vh',
       background: colors.bg,
-      display: 'grid',
-      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
       overflow: 'hidden',
+      transition: 'background 0.3s ease',
     },
     left: {
-      padding: isMobile ? '32px 24px' : '60px 64px',
+      flex: 1,
+      padding: isMobile ? '28px 20px' : '48px 56px',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
       position: 'relative',
       overflow: 'hidden',
-      minHeight: isMobile ? 'auto' : 'auto',
     },
     orb: {
       position: 'absolute',
       borderRadius: '50%',
-      filter: 'blur(80px)',
+      filter: 'blur(100px)',
       pointerEvents: 'none',
-      opacity: theme === 'light' ? 0.5 : 1,
+      opacity: theme === 'light' ? 0.4 : 0.6,
     },
     right: {
+      flex: isMobile ? 'none' : '0 0 420px',
       background: colors.bgCard,
       borderLeft: isMobile ? 'none' : `1px solid ${colors.border}`,
       borderTop: isMobile ? `1px solid ${colors.border}` : 'none',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: isMobile ? '32px 24px' : '60px 64px',
+      padding: isMobile ? '28px 20px 40px' : '48px 40px',
     },
     header: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: isMobile ? 24 : 0,
+      marginBottom: isMobile ? 28 : 0,
     },
     logo: {
       fontFamily: 'Syne, sans-serif',
-      fontSize: 22,
+      fontSize: isMobile ? 24 : 28,
       fontWeight: 800,
-      letterSpacing: '-0.5px',
+      letterSpacing: '-1px',
       color: colors.text,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
     },
-    logoAccent: { color: colors.accent },
-    themeToggle: {
+    logoAccent: {
+      color: colors.accent,
+      fontSize: isMobile ? 20 : 24,
+    },
+    themeArea: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+    },
+    toggleContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
       background: colors.bgCard,
       border: `1px solid ${colors.border}`,
-      borderRadius: 20,
+      borderRadius: 24,
+      padding: '6px 12px',
+    },
+    toggleLabel: {
+      fontSize: 18,
+    },
+    toggleSwitch: {
+      width: 48,
+      height: 26,
+      borderRadius: 13,
+      background: theme === 'dark' ? colors.accent : colors.border,
+      position: 'relative',
+      cursor: 'pointer',
+      transition: 'background 0.2s',
+    },
+    toggleKnob: {
+      width: 20,
+      height: 20,
+      borderRadius: '50%',
+      background: '#fff',
+      position: 'absolute',
+      top: 3,
+      left: theme === 'dark' ? 25 : 3,
+      transition: 'left 0.2s',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+    },
+    colorBtn: {
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 12,
       padding: '8px 12px',
       cursor: 'pointer',
-      fontSize: 16,
+      fontSize: 14,
+      color: colors.textMuted,
       display: 'flex',
       alignItems: 'center',
       gap: 6,
+    },
+    colorDropdown: {
+      position: 'absolute',
+      top: '100%',
+      right: 0,
+      marginTop: 8,
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 12,
+      padding: 8,
+      display: 'flex',
+      gap: 6,
+      zIndex: 10,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+    },
+    colorOption: {
+      width: 32,
+      height: 32,
+      borderRadius: '50%',
+      cursor: 'pointer',
+      border: '2px solid transparent',
+      transition: 'transform 0.15s, border-color 0.15s',
     },
     headline: {
       fontFamily: 'Syne, sans-serif',
-      fontSize: isMobile ? 36 : 56,
+      fontSize: isMobile ? 42 : 64,
       fontWeight: 800,
-      lineHeight: 1.05,
-      letterSpacing: '-2px',
+      lineHeight: 1.0,
+      letterSpacing: '-3px',
       color: colors.text,
-      marginBottom: 24,
+      marginBottom: 20,
     },
     subline: {
-      fontSize: isMobile ? 15 : 17,
+      fontSize: isMobile ? 16 : 18,
       color: colors.textMuted,
       lineHeight: 1.6,
-      maxWidth: 420,
-      marginBottom: isMobile ? 32 : 48,
+      maxWidth: 440,
+      marginBottom: isMobile ? 28 : 40,
+      fontFamily: 'DM Sans, sans-serif',
     },
     orbitGrid: {
-      display: 'grid',
-      gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 1fr)',
+      display: 'flex',
+      flexWrap: 'wrap',
       gap: 10,
-      maxWidth: 360,
     },
     orbitChip: {
-      background: theme === 'light' ? colors.bgInput : '#0f0f1f',
+      background: colors.bgCard,
       border: `1px solid ${colors.border}`,
-      borderRadius: 12,
-      padding: isMobile ? '10px 8px' : '12px 14px',
-      fontSize: isMobile ? 11 : 13,
-      color: colors.textMuted,
+      borderRadius: 24,
+      padding: '10px 16px',
+      fontSize: 14,
+      color: colors.text,
       display: 'flex',
       alignItems: 'center',
-      gap: 6,
+      gap: 8,
+      fontFamily: 'DM Sans, sans-serif',
+      fontWeight: 500,
     },
     howSection: {
-      marginTop: isMobile ? 32 : 40,
+      marginTop: isMobile ? 28 : 40,
       paddingTop: isMobile ? 24 : 32,
       borderTop: `1px solid ${colors.border}`,
     },
     howTitle: {
-      fontSize: 11,
-      color: colors.textDim,
-      letterSpacing: '1.5px',
+      fontSize: 13,
+      color: colors.textMuted,
+      letterSpacing: '1px',
       textTransform: 'uppercase',
-      marginBottom: 20,
+      marginBottom: 16,
+      fontFamily: 'DM Sans, sans-serif',
+      fontWeight: 600,
     },
     howGrid: {
       display: 'flex',
       flexDirection: isMobile ? 'column' : 'row',
-      gap: isMobile ? 12 : 20,
+      gap: 12,
     },
     howCard: {
       flex: 1,
       background: colors.bgCard,
       border: `1px solid ${colors.border}`,
-      borderRadius: 14,
-      padding: isMobile ? '16px 14px' : '20px 16px',
-      textAlign: 'center',
-      display: isMobile ? 'flex' : 'block',
+      borderRadius: 16,
+      padding: isMobile ? '14px 16px' : '20px',
+      display: 'flex',
       alignItems: 'center',
-      gap: isMobile ? 12 : 0,
+      gap: 14,
     },
     howStep: {
-      width: 28,
-      height: 28,
+      width: 36,
+      height: 36,
       borderRadius: '50%',
       background: colors.accentGradient,
       color: '#fff',
-      fontSize: 13,
+      fontSize: 15,
       fontWeight: 700,
-      display: 'inline-flex',
+      display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: isMobile ? 0 : 12,
       flexShrink: 0,
-    },
-    howIcon: {
-      fontSize: 24,
-      marginBottom: isMobile ? 0 : 8,
-      display: isMobile ? 'none' : 'block',
+      fontFamily: 'Syne, sans-serif',
     },
     howCardContent: {
-      textAlign: isMobile ? 'left' : 'center',
+      flex: 1,
     },
     howCardTitle: {
       fontFamily: 'Syne, sans-serif',
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: 700,
       color: colors.text,
-      marginBottom: 4,
+      marginBottom: 2,
     },
     howCardDesc: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.textMuted,
-      lineHeight: 1.4,
+      fontFamily: 'DM Sans, sans-serif',
     },
-    form: { width: '100%', maxWidth: 400 },
+    form: { width: '100%', maxWidth: 360 },
     formTitle: {
       fontFamily: 'Syne, sans-serif',
-      fontSize: isMobile ? 24 : 30,
-      fontWeight: 700,
+      fontSize: isMobile ? 28 : 32,
+      fontWeight: 800,
       color: colors.text,
       marginBottom: 8,
+      letterSpacing: '-1px',
     },
-    formSub: { fontSize: 14, color: colors.textMuted, marginBottom: 36 },
+    formSub: {
+      fontSize: 15,
+      color: colors.textMuted,
+      marginBottom: 32,
+      fontFamily: 'DM Sans, sans-serif',
+    },
     input: {
       width: '100%',
       background: colors.bgInput,
       border: `1px solid ${colors.border}`,
       borderRadius: 12,
-      padding: '14px 18px',
-      fontSize: 15,
+      padding: '14px 16px',
+      fontSize: 16,
       color: colors.text,
       outline: 'none',
       marginBottom: 12,
@@ -242,35 +315,41 @@ export default function Landing() {
       background: colors.accentGradient,
       border: 'none',
       borderRadius: 12,
-      padding: '15px',
-      fontSize: 15,
+      padding: '16px',
+      fontSize: 16,
       fontWeight: 600,
       color: '#fff',
       cursor: loading ? 'not-allowed' : 'pointer',
       opacity: loading ? 0.7 : 1,
       marginTop: 8,
       fontFamily: 'DM Sans, sans-serif',
-      letterSpacing: '0.3px',
     },
     toggle: {
       textAlign: 'center',
       marginTop: 24,
-      fontSize: 14,
+      fontSize: 15,
       color: colors.textMuted,
+      fontFamily: 'DM Sans, sans-serif',
     },
     toggleLink: {
       color: colors.accent,
       cursor: 'pointer',
       marginLeft: 4,
-      textDecoration: 'underline',
+      fontWeight: 600,
     },
-    error: { color: '#ff6b8a', fontSize: 13, marginTop: 8, textAlign: 'center' },
-    success: { color: '#63ffb4', fontSize: 13, marginTop: 8, textAlign: 'center' },
+    error: { color: '#ff6b8a', fontSize: 14, marginTop: 12, textAlign: 'center' },
+    success: { color: '#63ffb4', fontSize: 14, marginTop: 12, textAlign: 'center' },
     footer: {
       fontSize: 13,
       color: colors.textDim,
-      marginTop: isMobile ? 32 : 0,
+      marginTop: isMobile ? 28 : 0,
+      fontFamily: 'DM Sans, sans-serif',
     },
+  }
+
+  const getColorPreview = (key) => {
+    const opt = bgColors.find(b => b.key === key)
+    return theme === 'dark' ? opt?.dark : opt?.light
   }
 
   return (
@@ -278,16 +357,57 @@ export default function Landing() {
       {/* Left panel */}
       <div style={s.left}>
         {/* Background orbs */}
-        <div style={{ ...s.orb, width: isMobile ? 200 : 400, height: isMobile ? 200 : 400, background: '#6c63ff22', top: -100, left: -100 }} />
-        <div style={{ ...s.orb, width: isMobile ? 150 : 300, height: isMobile ? 150 : 300, background: '#9b59b622', bottom: 50, right: -50 }} />
+        <div style={{ ...s.orb, width: isMobile ? 250 : 450, height: isMobile ? 250 : 450, background: '#6c63ff33', top: -120, left: -120 }} />
+        <div style={{ ...s.orb, width: isMobile ? 180 : 350, height: isMobile ? 180 : 350, background: '#9b59b633', bottom: 30, right: -80 }} />
 
         <div style={s.header}>
           <div style={s.logo}>
             <span style={s.logoAccent}>●</span> Orbit
           </div>
-          <button style={s.themeToggle} onClick={toggleTheme} title="Toggle theme">
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+          <div style={s.themeArea}>
+            {/* Color picker */}
+            <div style={{ position: 'relative' }}>
+              <button
+                style={s.colorBtn}
+                onClick={() => setShowColors(!showColors)}
+              >
+                <span style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  background: getColorPreview(bgColor),
+                  border: `1px solid ${colors.border}`,
+                }} />
+                <span style={{ fontSize: 12 }}>▼</span>
+              </button>
+              {showColors && (
+                <div style={s.colorDropdown}>
+                  {bgColors.map(c => (
+                    <div
+                      key={c.key}
+                      style={{
+                        ...s.colorOption,
+                        background: theme === 'dark' ? c.dark : c.light,
+                        borderColor: bgColor === c.key ? colors.accent : 'transparent',
+                        transform: bgColor === c.key ? 'scale(1.1)' : 'scale(1)',
+                      }}
+                      onClick={() => { setBgColor(c.key); setShowColors(false) }}
+                      title={c.label}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Theme toggle */}
+            <div style={s.toggleContainer}>
+              <span style={s.toggleLabel}>☀️</span>
+              <div style={s.toggleSwitch} onClick={toggleTheme}>
+                <div style={s.toggleKnob} />
+              </div>
+              <span style={s.toggleLabel}>🌙</span>
+            </div>
+          </div>
         </div>
 
         <div>
@@ -302,7 +422,7 @@ export default function Landing() {
           <div style={s.orbitGrid}>
             {ORBITS.map(o => (
               <div key={o.label} style={s.orbitChip}>
-                <span>{o.emoji}</span>
+                <span style={{ fontSize: 18 }}>{o.emoji}</span>
                 <span>{o.label}</span>
               </div>
             ))}
@@ -314,7 +434,6 @@ export default function Landing() {
               {HOW_IT_WORKS.map(h => (
                 <div key={h.step} style={s.howCard}>
                   <span style={s.howStep}>{h.step}</span>
-                  {!isMobile && <span style={s.howIcon}>{h.icon}</span>}
                   <div style={s.howCardContent}>
                     <div style={s.howCardTitle}>{h.title}</div>
                     <div style={s.howCardDesc}>{h.desc}</div>
@@ -380,7 +499,7 @@ export default function Landing() {
           <p style={s.toggle}>
             {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
             <span style={s.toggleLink} onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>
-              {mode === 'login' ? ' Sign up' : ' Sign in'}
+              {mode === 'login' ? 'Sign up' : 'Sign in'}
             </span>
           </p>
         </div>
