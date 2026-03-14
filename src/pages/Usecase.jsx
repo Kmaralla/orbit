@@ -11,6 +11,23 @@ const VALUE_TYPES = [
   { key: 'text', label: 'Text / Notes', icon: '📝' },
 ]
 
+const FREQUENCIES = [
+  { key: 'daily', label: 'Daily', desc: 'Every day' },
+  { key: 'weekdays', label: 'Weekdays', desc: 'Mon–Fri' },
+  { key: 'weekly', label: 'Weekly', desc: 'Once/week' },
+  { key: 'custom', label: 'Custom', desc: 'Pick days' },
+]
+
+const DAYS_OF_WEEK = [
+  { key: 'mon', label: 'M', full: 'Monday' },
+  { key: 'tue', label: 'T', full: 'Tuesday' },
+  { key: 'wed', label: 'W', full: 'Wednesday' },
+  { key: 'thu', label: 'T', full: 'Thursday' },
+  { key: 'fri', label: 'F', full: 'Friday' },
+  { key: 'sat', label: 'S', full: 'Saturday' },
+  { key: 'sun', label: 'S', full: 'Sunday' },
+]
+
 export default function Usecase() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -21,7 +38,7 @@ export default function Usecase() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})
   const [showAddItem, setShowAddItem] = useState(false)
-  const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', description: '' })
+  const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => { fetchAll() }, [id])
@@ -65,17 +82,32 @@ export default function Usecase() {
     setSaving(prev => ({ ...prev, [itemId]: false }))
   }
 
+  const toggleCustomDay = (day) => {
+    setNewItem(prev => ({
+      ...prev,
+      customDays: prev.customDays.includes(day)
+        ? prev.customDays.filter(d => d !== day)
+        : [...prev.customDays, day]
+    }))
+  }
+
   const addItem = async () => {
     if (!newItem.label.trim()) return
+    // For custom frequency, store days as comma-separated string like "custom:mon,wed,fri"
+    const frequencyValue = newItem.frequency === 'custom' && newItem.customDays.length > 0
+      ? `custom:${newItem.customDays.join(',')}`
+      : newItem.frequency
+
     const { data } = await supabase.from('checklist_items').insert({
       usecase_id: id,
       label: newItem.label,
       value_type: newItem.value_type,
+      frequency: frequencyValue,
       description: newItem.description
     }).select().single()
     if (data) {
       setItems(prev => [...prev, data])
-      setNewItem({ label: '', value_type: 'checkbox', description: '' })
+      setNewItem({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
       setShowAddItem(false)
     }
   }
@@ -177,7 +209,39 @@ export default function Usecase() {
       borderRadius: 10, padding: '12px 16px', color: '#e8e4f0', fontSize: 14,
       fontFamily: 'DM Sans, sans-serif', outline: 'none', marginBottom: 16,
     },
-    typeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 },
+    typeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 },
+    freqGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 20 },
+    freqBtn: {
+      background: '#080810',
+      border: '1px solid #1e1e32',
+      borderRadius: 8,
+      padding: '8px 6px',
+      cursor: 'pointer',
+      fontSize: 12,
+      color: '#6a6888',
+      textAlign: 'center',
+      fontFamily: 'DM Sans, sans-serif',
+      transition: 'all 0.15s',
+    },
+    freqBtnActive: { borderColor: '#6c63ff', color: '#a8a0ff', background: '#6c63ff11' },
+    freqDesc: { fontSize: 10, color: '#4a4870', marginTop: 2 },
+    daysGrid: { display: 'flex', gap: 6, marginBottom: 20, marginTop: 10 },
+    dayBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: '50%',
+      background: '#080810',
+      border: '1px solid #1e1e32',
+      cursor: 'pointer',
+      fontSize: 12,
+      fontWeight: 600,
+      color: '#6a6888',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.15s',
+    },
+    dayBtnActive: { borderColor: '#6c63ff', color: '#fff', background: '#6c63ff' },
     typeBtn: {
       background: '#080810', border: '1px solid #1e1e32',
       borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
@@ -243,8 +307,13 @@ export default function Usecase() {
                   {item.label}
                 </div>
                 {item.description && <div style={s.itemDesc}>{item.description}</div>}
-                <div style={{ fontSize: 11, color: '#2a2840', marginTop: 2 }}>
-                  {VALUE_TYPES.find(v => v.key === item.value_type)?.label}
+                <div style={{ fontSize: 11, color: '#2a2840', marginTop: 2, display: 'flex', gap: 8 }}>
+                  <span>{VALUE_TYPES.find(v => v.key === item.value_type)?.label}</span>
+                  <span style={{ color: '#6c63ff' }}>• {
+                    (item.frequency || 'daily').startsWith('custom:')
+                      ? (item.frequency.split(':')[1] || '').toUpperCase().split(',').join(', ')
+                      : FREQUENCIES.find(f => f.key === (item.frequency || 'daily'))?.label || 'Daily'
+                  }</span>
                 </div>
               </div>
 
@@ -349,6 +418,33 @@ export default function Usecase() {
                 </button>
               ))}
             </div>
+            <label style={s.label}>Frequency</label>
+            <div style={s.freqGrid}>
+              {FREQUENCIES.map(f => (
+                <button
+                  key={f.key}
+                  style={{ ...s.freqBtn, ...(newItem.frequency === f.key ? s.freqBtnActive : {}) }}
+                  onClick={() => setNewItem(p => ({ ...p, frequency: f.key, customDays: f.key === 'custom' ? p.customDays : [] }))}
+                >
+                  <div>{f.label}</div>
+                  <div style={s.freqDesc}>{f.desc}</div>
+                </button>
+              ))}
+            </div>
+            {newItem.frequency === 'custom' && (
+              <div style={s.daysGrid}>
+                {DAYS_OF_WEEK.map(day => (
+                  <button
+                    key={day.key}
+                    style={{ ...s.dayBtn, ...(newItem.customDays.includes(day.key) ? s.dayBtnActive : {}) }}
+                    onClick={() => toggleCustomDay(day.key)}
+                    title={day.full}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div style={s.rowBtns}>
               <button style={s.cancelBtn} onClick={() => setShowAddItem(false)}>Cancel</button>
               <button style={s.saveBtn} onClick={addItem}>Add Item</button>

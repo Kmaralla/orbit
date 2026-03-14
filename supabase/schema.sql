@@ -26,9 +26,15 @@ create table if not exists checklist_items (
   label text not null,
   description text,
   value_type text check (value_type in ('checkbox', 'score', 'number', 'text')) default 'checkbox',
+  frequency text check (frequency in ('daily', 'weekdays', 'weekends', 'weekly', 'custom')) default 'daily',
   sort_order int default 0,
   created_at timestamptz default now()
 );
+
+-- =============================================
+-- MIGRATION: Run this if table already exists
+-- =============================================
+-- ALTER TABLE checklist_items ADD COLUMN IF NOT EXISTS frequency text default 'daily';
 
 -- CHECKIN ENTRIES table
 create table if not exists checkin_entries (

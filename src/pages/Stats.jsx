@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { getClaudeAnalysis } from '../lib/claude'
 import Navbar from '../components/Navbar'
-import { format, subDays, startOfWeek, eachDayOfInterval } from 'date-fns'
+import { format, subDays, startOfWeek, eachDayOfInterval, isWeekend, getDay } from 'date-fns'
 
 export default function Stats() {
   const { id } = useParams()
@@ -85,19 +85,82 @@ export default function Stats() {
     }
   })
 
-  // Per-item stats
+  // Map day keys to JS getDay() values (0=Sun, 1=Mon, etc.)
+  const dayKeyToNumber = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
+
+  // Helper: Parse custom frequency like "custom:mon,wed,fri" into array of day numbers
+  const parseCustomDays = (frequency) => {
+    if (!frequency?.startsWith('custom:')) return []
+    const days = frequency.split(':')[1]?.split(',') || []
+    return days.map(d => dayKeyToNumber[d]).filter(n => n !== undefined)
+  }
+
+  // Helper: Calculate expected days based on frequency
+  const getExpectedDays = (frequency, dateRange) => {
+    if (frequency?.startsWith('custom:')) {
+      const customDays = parseCustomDays(frequency)
+      return dateRange.filter(d => customDays.includes(getDay(d))).length
+    }
+    switch (frequency) {
+      case 'weekdays':
+        return dateRange.filter(d => !isWeekend(d)).length
+      case 'weekends':
+        return dateRange.filter(d => isWeekend(d)).length
+      case 'weekly':
+        return Math.ceil(dateRange.length / 7)
+      case 'daily':
+      default:
+        return dateRange.length
+    }
+  }
+
+  // Helper: Get frequency label for display
+  const getFrequencyLabel = (frequency) => {
+    if (frequency?.startsWith('custom:')) {
+      const days = frequency.split(':')[1]?.toUpperCase().split(',').join(', ')
+      return days || 'custom'
+    }
+    return { daily: 'daily', weekdays: 'weekdays', weekends: 'weekends', weekly: 'weekly' }[frequency] || 'daily'
+  }
+
+  // Per-item stats with frequency awareness
   const itemStats = items.map(item => {
     const itemEntries = entries.filter(e => e.checklist_item_id === item.id)
+    const frequency = item.frequency || 'daily'
+    const expectedDays = getExpectedDays(frequency, dateRange)
     const total = itemEntries.length
+    const frequencyLabel = getFrequencyLabel(frequency)
+
     if (item.value_type === 'checkbox') {
       const done = itemEntries.filter(e => e.value === 'true').length
-      return { ...item, stat: `${done}/${numDays} days`, pct: numDays > 0 ? Math.round((done / numDays) * 100) : 0 }
+      return {
+        ...item,
+        stat: `${done}/${expectedDays}`,
+        pct: expectedDays > 0 ? Math.round((done / expectedDays) * 100) : 0,
+        expectedDays,
+        frequency,
+        frequencyLabel
+      }
     }
     if (item.value_type === 'score') {
       const avg = total > 0 ? (itemEntries.reduce((a, e) => a + Number(e.value), 0) / total).toFixed(1) : 'N/A'
-      return { ...item, stat: `Avg: ${avg}/10`, pct: avg !== 'N/A' ? Math.round((avg / 10) * 100) : 0 }
+      return {
+        ...item,
+        stat: `Avg: ${avg}/10`,
+        pct: avg !== 'N/A' ? Math.round((avg / 10) * 100) : 0,
+        expectedDays,
+        frequency,
+        frequencyLabel
+      }
     }
-    return { ...item, stat: `${total} entries`, pct: Math.round((total / numDays) * 100) }
+    return {
+      ...item,
+      stat: `${total}/${expectedDays}`,
+      pct: expectedDays > 0 ? Math.round((total / expectedDays) * 100) : 0,
+      expectedDays,
+      frequency,
+      frequencyLabel
+    }
   })
 
   // Items that need focus (below 50% or low scores)
@@ -285,10 +348,10 @@ export default function Stats() {
                   <div style={s.focusLabel}>{item.label}</div>
                   <div style={s.focusTip}>
                     {item.value_type === 'checkbox'
-                      ? `Only completed ${item.stat.split('/')[0]} of the last ${numDays} days`
+                      ? `Completed ${item.stat.split('/')[0]} of ${item.expectedDays} expected (${item.frequencyLabel})`
                       : item.value_type === 'score'
                       ? `Average score is ${item.stat.split(': ')[1]}`
-                      : `${item.stat} in ${numDays} days`}
+                      : `${item.stat} (${item.frequencyLabel})`}
                   </div>
                 </div>
               </div>
