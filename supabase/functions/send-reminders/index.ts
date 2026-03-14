@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Orbit <hello@resend.dev>', // Use your verified domain
+            from: 'Orbit <reminders@orbityours.com>',
             to: email,
             subject: orbits.length === 1
               ? `${orbits[0].icon || '○'} Check in: ${orbits[0].name}`

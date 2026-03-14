@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 
 const ORBITS = [
   { emoji: '👴', label: "Dad's Health" },
@@ -17,14 +18,23 @@ const HOW_IT_WORKS = [
 
 export default function Landing() {
   const { user } = useAuth()
+  const { colors, theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
-  const [mode, setMode] = useState('login') // login | signup
+  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   if (user) { navigate('/dashboard'); return null }
 
@@ -55,145 +65,173 @@ export default function Landing() {
   const s = {
     page: {
       minHeight: '100vh',
-      background: '#080810',
+      background: colors.bg,
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
       overflow: 'hidden',
     },
     left: {
-      padding: '60px 64px',
+      padding: isMobile ? '32px 24px' : '60px 64px',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
       position: 'relative',
       overflow: 'hidden',
+      minHeight: isMobile ? 'auto' : 'auto',
     },
     orb: {
       position: 'absolute',
       borderRadius: '50%',
       filter: 'blur(80px)',
       pointerEvents: 'none',
+      opacity: theme === 'light' ? 0.5 : 1,
     },
     right: {
-      background: '#0d0d1a',
-      borderLeft: '1px solid #1a1a2e',
+      background: colors.bgCard,
+      borderLeft: isMobile ? 'none' : `1px solid ${colors.border}`,
+      borderTop: isMobile ? `1px solid ${colors.border}` : 'none',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '60px 64px',
+      padding: isMobile ? '32px 24px' : '60px 64px',
+    },
+    header: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: isMobile ? 24 : 0,
     },
     logo: {
       fontFamily: 'Syne, sans-serif',
       fontSize: 22,
       fontWeight: 800,
       letterSpacing: '-0.5px',
-      color: '#e8e4f0',
+      color: colors.text,
     },
-    logoAccent: { color: '#6c63ff' },
+    logoAccent: { color: colors.accent },
+    themeToggle: {
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 20,
+      padding: '8px 12px',
+      cursor: 'pointer',
+      fontSize: 16,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+    },
     headline: {
       fontFamily: 'Syne, sans-serif',
-      fontSize: 56,
+      fontSize: isMobile ? 36 : 56,
       fontWeight: 800,
       lineHeight: 1.05,
       letterSpacing: '-2px',
-      color: '#e8e4f0',
+      color: colors.text,
       marginBottom: 24,
     },
     subline: {
-      fontSize: 17,
-      color: '#6b6890',
+      fontSize: isMobile ? 15 : 17,
+      color: colors.textMuted,
       lineHeight: 1.6,
       maxWidth: 420,
-      marginBottom: 48,
+      marginBottom: isMobile ? 32 : 48,
     },
     orbitGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(3, 1fr)',
+      gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 1fr)',
       gap: 10,
       maxWidth: 360,
     },
     orbitChip: {
-      background: '#0f0f1f',
-      border: '1px solid #1e1e32',
+      background: theme === 'light' ? colors.bgInput : '#0f0f1f',
+      border: `1px solid ${colors.border}`,
       borderRadius: 12,
-      padding: '12px 14px',
-      fontSize: 13,
-      color: '#4a4870',
+      padding: isMobile ? '10px 8px' : '12px 14px',
+      fontSize: isMobile ? 11 : 13,
+      color: colors.textMuted,
       display: 'flex',
       alignItems: 'center',
-      gap: 8,
+      gap: 6,
     },
     howSection: {
-      marginTop: 40,
-      paddingTop: 32,
-      borderTop: '1px solid #1a1a2e',
+      marginTop: isMobile ? 32 : 40,
+      paddingTop: isMobile ? 24 : 32,
+      borderTop: `1px solid ${colors.border}`,
     },
     howTitle: {
       fontSize: 11,
-      color: '#3a3858',
+      color: colors.textDim,
       letterSpacing: '1.5px',
       textTransform: 'uppercase',
       marginBottom: 20,
     },
     howGrid: {
       display: 'flex',
-      gap: 20,
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? 12 : 20,
     },
     howCard: {
       flex: 1,
-      background: '#0d0d1a',
-      border: '1px solid #1a1a2e',
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
       borderRadius: 14,
-      padding: '20px 16px',
+      padding: isMobile ? '16px 14px' : '20px 16px',
       textAlign: 'center',
+      display: isMobile ? 'flex' : 'block',
+      alignItems: 'center',
+      gap: isMobile ? 12 : 0,
     },
     howStep: {
       width: 28,
       height: 28,
       borderRadius: '50%',
-      background: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
+      background: colors.accentGradient,
       color: '#fff',
       fontSize: 13,
       fontWeight: 700,
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 12,
+      marginBottom: isMobile ? 0 : 12,
+      flexShrink: 0,
     },
     howIcon: {
       fontSize: 24,
-      marginBottom: 8,
-      display: 'block',
+      marginBottom: isMobile ? 0 : 8,
+      display: isMobile ? 'none' : 'block',
+    },
+    howCardContent: {
+      textAlign: isMobile ? 'left' : 'center',
     },
     howCardTitle: {
       fontFamily: 'Syne, sans-serif',
       fontSize: 14,
       fontWeight: 700,
-      color: '#e8e4f0',
+      color: colors.text,
       marginBottom: 4,
     },
     howCardDesc: {
       fontSize: 12,
-      color: '#4a4870',
+      color: colors.textMuted,
       lineHeight: 1.4,
     },
     form: { width: '100%', maxWidth: 400 },
     formTitle: {
       fontFamily: 'Syne, sans-serif',
-      fontSize: 30,
+      fontSize: isMobile ? 24 : 30,
       fontWeight: 700,
-      color: '#e8e4f0',
+      color: colors.text,
       marginBottom: 8,
     },
-    formSub: { fontSize: 14, color: '#4a4870', marginBottom: 36 },
+    formSub: { fontSize: 14, color: colors.textMuted, marginBottom: 36 },
     input: {
       width: '100%',
-      background: '#0a0a16',
-      border: '1px solid #1e1e32',
+      background: colors.bgInput,
+      border: `1px solid ${colors.border}`,
       borderRadius: 12,
       padding: '14px 18px',
       fontSize: 15,
-      color: '#e8e4f0',
+      color: colors.text,
       outline: 'none',
       marginBottom: 12,
       fontFamily: 'DM Sans, sans-serif',
@@ -201,7 +239,7 @@ export default function Landing() {
     },
     btn: {
       width: '100%',
-      background: 'linear-gradient(135deg, #6c63ff 0%, #9b59b6 100%)',
+      background: colors.accentGradient,
       border: 'none',
       borderRadius: 12,
       padding: '15px',
@@ -218,16 +256,21 @@ export default function Landing() {
       textAlign: 'center',
       marginTop: 24,
       fontSize: 14,
-      color: '#4a4870',
+      color: colors.textMuted,
     },
     toggleLink: {
-      color: '#6c63ff',
+      color: colors.accent,
       cursor: 'pointer',
       marginLeft: 4,
       textDecoration: 'underline',
     },
     error: { color: '#ff6b8a', fontSize: 13, marginTop: 8, textAlign: 'center' },
     success: { color: '#63ffb4', fontSize: 13, marginTop: 8, textAlign: 'center' },
+    footer: {
+      fontSize: 13,
+      color: colors.textDim,
+      marginTop: isMobile ? 32 : 0,
+    },
   }
 
   return (
@@ -235,18 +278,23 @@ export default function Landing() {
       {/* Left panel */}
       <div style={s.left}>
         {/* Background orbs */}
-        <div style={{ ...s.orb, width: 400, height: 400, background: '#6c63ff22', top: -100, left: -100 }} />
-        <div style={{ ...s.orb, width: 300, height: 300, background: '#9b59b622', bottom: 50, right: -50 }} />
+        <div style={{ ...s.orb, width: isMobile ? 200 : 400, height: isMobile ? 200 : 400, background: '#6c63ff22', top: -100, left: -100 }} />
+        <div style={{ ...s.orb, width: isMobile ? 150 : 300, height: isMobile ? 150 : 300, background: '#9b59b622', bottom: 50, right: -50 }} />
 
-        <div style={s.logo}>
-          <span style={s.logoAccent}>●</span> Orbit
+        <div style={s.header}>
+          <div style={s.logo}>
+            <span style={s.logoAccent}>●</span> Orbit
+          </div>
+          <button style={s.themeToggle} onClick={toggleTheme} title="Toggle theme">
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
         </div>
 
         <div>
           <h1 style={s.headline}>
             Track what<br />
             matters<br />
-            <span style={{ color: '#6c63ff' }}>most.</span>
+            <span style={{ color: colors.accent }}>most.</span>
           </h1>
           <p style={s.subline}>
             Create orbits for different areas of your life. Check in daily. Get AI insights on your patterns.
@@ -266,16 +314,18 @@ export default function Landing() {
               {HOW_IT_WORKS.map(h => (
                 <div key={h.step} style={s.howCard}>
                   <span style={s.howStep}>{h.step}</span>
-                  <span style={s.howIcon}>{h.icon}</span>
-                  <div style={s.howCardTitle}>{h.title}</div>
-                  <div style={s.howCardDesc}>{h.desc}</div>
+                  {!isMobile && <span style={s.howIcon}>{h.icon}</span>}
+                  <div style={s.howCardContent}>
+                    <div style={s.howCardTitle}>{h.title}</div>
+                    <div style={s.howCardDesc}>{h.desc}</div>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        <div style={{ fontSize: 13, color: '#2a2840' }}>
+        <div style={s.footer}>
           Free forever · Powered by Claude AI
         </div>
       </div>
@@ -296,8 +346,8 @@ export default function Landing() {
               placeholder="Full name"
               value={name}
               onChange={e => setName(e.target.value)}
-              onFocus={e => e.target.style.borderColor = '#6c63ff'}
-              onBlur={e => e.target.style.borderColor = '#1e1e32'}
+              onFocus={e => e.target.style.borderColor = colors.accent}
+              onBlur={e => e.target.style.borderColor = colors.border}
             />
           )}
           <input
@@ -306,8 +356,8 @@ export default function Landing() {
             placeholder="Email address"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            onFocus={e => e.target.style.borderColor = '#6c63ff'}
-            onBlur={e => e.target.style.borderColor = '#1e1e32'}
+            onFocus={e => e.target.style.borderColor = colors.accent}
+            onBlur={e => e.target.style.borderColor = colors.border}
           />
           <input
             style={s.input}
@@ -315,8 +365,8 @@ export default function Landing() {
             placeholder="Password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            onFocus={e => e.target.style.borderColor = '#6c63ff'}
-            onBlur={e => e.target.style.borderColor = '#1e1e32'}
+            onFocus={e => e.target.style.borderColor = colors.accent}
+            onBlur={e => e.target.style.borderColor = colors.border}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           />
 
