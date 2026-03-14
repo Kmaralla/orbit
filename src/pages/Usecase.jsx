@@ -305,7 +305,7 @@ export default function Usecase() {
             style={{ background: '#6c63ff22', border: '1px solid #6c63ff44', borderRadius: 12, padding: '12px 24px', color: '#6c63ff', cursor: 'pointer', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }}
             onClick={() => navigate(`/usecase/${id}/stats`)}
           >
-            📊 View Stats & Trends
+            📊 Check Your Progress
           </button>
         </div>
       </div>

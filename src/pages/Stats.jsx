@@ -100,6 +100,18 @@ export default function Stats() {
     return { ...item, stat: `${total} entries`, pct: Math.round((total / numDays) * 100) }
   })
 
+  // Items that need focus (below 50% or low scores)
+  const needsFocus = itemStats.filter(item => {
+    if (item.pct < 50) return true
+    if (item.value_type === 'score' && item.pct < 60) return true
+    return false
+  }).sort((a, b) => a.pct - b.pct)
+
+  // Overall score
+  const overallPct = itemStats.length > 0
+    ? Math.round(itemStats.reduce((sum, i) => sum + i.pct, 0) / itemStats.length)
+    : 0
+
   const s = {
     page: { minHeight: '100vh', background: '#080810' },
     content: { maxWidth: 900, margin: '0 auto', padding: '40px 24px' },
@@ -127,6 +139,65 @@ export default function Stats() {
     listItem: { fontSize: 14, color: '#a89fff', lineHeight: 1.6, marginBottom: 8, paddingLeft: 12, borderLeft: '2px solid #6c63ff44' },
     nextStep: { fontSize: 14, color: '#e8e4f0', lineHeight: 1.6, marginBottom: 8, paddingLeft: 12, borderLeft: '2px solid #9b59b6' },
     tooltipStyle: { background: '#0d0d1a', border: '1px solid #2a2a40', borderRadius: 8, fontSize: 12, color: '#e8e4f0' },
+    focusCard: {
+      background: 'linear-gradient(135deg, #1a1520 0%, #0d0d1a 100%)',
+      border: '1px solid #3d2a4a',
+      borderRadius: 20,
+      padding: 28,
+      marginBottom: 20,
+    },
+    focusItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '12px 16px',
+      background: '#0a0a14',
+      borderRadius: 12,
+      marginBottom: 8,
+      border: '1px solid #2a1a3a',
+    },
+    focusPct: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 14,
+      fontWeight: 700,
+      fontFamily: 'monospace',
+    },
+    focusLabel: {
+      flex: 1,
+      fontSize: 14,
+      color: '#e8e4f0',
+    },
+    focusTip: {
+      fontSize: 12,
+      color: '#9b8fb8',
+      marginTop: 2,
+    },
+    overallScore: {
+      textAlign: 'center',
+      padding: '20px 0',
+      marginBottom: 20,
+    },
+    scoreCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: '50%',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 28,
+      fontWeight: 800,
+      fontFamily: 'Syne, sans-serif',
+      marginBottom: 8,
+    },
+    scoreLabel: {
+      fontSize: 14,
+      color: '#4a4870',
+    },
   }
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -154,7 +225,7 @@ export default function Stats() {
         <div style={s.header}>
           <div style={s.title}>
             <span>{usecase?.icon}</span>
-            <span>{usecase?.name} — Stats</span>
+            <span>Check Your Progress</span>
           </div>
           <div style={s.periodToggle}>
             {['week', 'month'].map(p => (
@@ -172,6 +243,58 @@ export default function Stats() {
             ))}
           </div>
         </div>
+
+        {/* Overall Score */}
+        {itemStats.length > 0 && (
+          <div style={s.overallScore}>
+            <div
+              style={{
+                ...s.scoreCircle,
+                background: overallPct >= 70 ? 'linear-gradient(135deg, #2d4a2d, #1a3a1a)'
+                  : overallPct >= 40 ? 'linear-gradient(135deg, #4a4a2d, #3a3a1a)'
+                  : 'linear-gradient(135deg, #4a2d2d, #3a1a1a)',
+                color: overallPct >= 70 ? '#7dba7d' : overallPct >= 40 ? '#baba7d' : '#ba7d7d',
+                border: `2px solid ${overallPct >= 70 ? '#3d6a3d' : overallPct >= 40 ? '#6a6a3d' : '#6a3d3d'}`,
+              }}
+            >
+              {overallPct}%
+            </div>
+            <div style={s.scoreLabel}>
+              {overallPct >= 70 ? 'Great progress!' : overallPct >= 40 ? 'Room to improve' : 'Needs attention'}
+            </div>
+          </div>
+        )}
+
+        {/* Needs Focus Section */}
+        {needsFocus.length > 0 && (
+          <div style={s.focusCard}>
+            <div style={s.cardTitle}>🎯 Needs More Focus</div>
+            {needsFocus.slice(0, 3).map(item => (
+              <div key={item.id} style={s.focusItem}>
+                <div
+                  style={{
+                    ...s.focusPct,
+                    background: item.pct < 30 ? '#3a1a1a' : '#3a2a1a',
+                    color: item.pct < 30 ? '#ff6b6b' : '#ffaa6b',
+                    border: `1px solid ${item.pct < 30 ? '#5a2a2a' : '#5a4a2a'}`,
+                  }}
+                >
+                  {item.pct}%
+                </div>
+                <div>
+                  <div style={s.focusLabel}>{item.label}</div>
+                  <div style={s.focusTip}>
+                    {item.value_type === 'checkbox'
+                      ? `Only completed ${item.stat.split('/')[0]} of the last ${numDays} days`
+                      : item.value_type === 'score'
+                      ? `Average score is ${item.stat.split(': ')[1]}`
+                      : `${item.stat} in ${numDays} days`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Completion chart */}
         <div style={s.card}>

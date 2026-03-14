@@ -15,6 +15,10 @@ export default function Dashboard() {
   const [showAdd, setShowAdd] = useState(false)
   const [todayStats, setTodayStats] = useState({})
   const [copiedId, setCopiedId] = useState(null)
+  const [remindersEnabled, setRemindersEnabled] = useState(false)
+  const [togglingReminder, setTogglingReminder] = useState(false)
+
+  const userEmail = user?.email || ''
 
   const copyOrbitLink = async (ucId, e) => {
     e.stopPropagation()
@@ -34,6 +38,10 @@ export default function Dashboard() {
       .order('created_at')
     setUsecases(data || [])
 
+    // Check if any orbit has reminders enabled
+    const hasReminders = (data || []).some(uc => uc.notify_email)
+    setRemindersEnabled(hasReminders)
+
     // fetch today's checkin counts
     const today = new Date().toISOString().split('T')[0]
     const { data: entries } = await supabase
@@ -49,6 +57,28 @@ export default function Dashboard() {
     })
     setTodayStats(counts)
     setLoading(false)
+  }
+
+  const toggleReminders = async () => {
+    setTogglingReminder(true)
+    if (remindersEnabled) {
+      // Disable: clear notify_email from all orbits
+      await supabase
+        .from('usecases')
+        .update({ notify_email: null, notify_time: null })
+        .eq('user_id', user.id)
+      setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: null, notify_time: null })))
+      setRemindersEnabled(false)
+    } else {
+      // Enable: set user's email on all orbits
+      await supabase
+        .from('usecases')
+        .update({ notify_email: userEmail, notify_time: '08:00' })
+        .eq('user_id', user.id)
+      setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: userEmail, notify_time: '08:00' })))
+      setRemindersEnabled(true)
+    }
+    setTogglingReminder(false)
   }
 
   const deleteUsecase = async (id) => {
@@ -164,6 +194,44 @@ export default function Dashboard() {
       marginBottom: 8,
     },
     emptyText: { fontSize: 15, color: '#2a2840', marginBottom: 24 },
+    reminderToggle: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      background: '#0d0d1a',
+      border: '1px solid #1a1a2e',
+      borderRadius: 12,
+      padding: '12px 16px',
+      marginBottom: 24,
+    },
+    toggleSwitch: {
+      width: 44,
+      height: 24,
+      borderRadius: 12,
+      background: '#1a1a2e',
+      position: 'relative',
+      cursor: 'pointer',
+      transition: 'background 0.2s',
+    },
+    toggleKnob: {
+      width: 18,
+      height: 18,
+      borderRadius: '50%',
+      background: '#4a4870',
+      position: 'absolute',
+      top: 3,
+      left: 3,
+      transition: 'all 0.2s',
+    },
+    toggleLabel: {
+      fontSize: 14,
+      color: '#e8e4f0',
+      flex: 1,
+    },
+    toggleSub: {
+      fontSize: 12,
+      color: '#4a4870',
+    },
   }
 
   const hour = new Date().getHours()
@@ -187,6 +255,34 @@ export default function Dashboard() {
             <span>+</span> New Orbit
           </button>
         </div>
+
+        {/* Daily Reminder Toggle */}
+        {usecases.length > 0 && !loading && (
+          <div style={s.reminderToggle}>
+            <div>
+              <div style={s.toggleLabel}>Daily email reminder</div>
+              <div style={s.toggleSub}>
+                {remindersEnabled ? `Sending to ${userEmail}` : 'Get a gentle nudge each morning'}
+              </div>
+            </div>
+            <div
+              style={{
+                ...s.toggleSwitch,
+                background: remindersEnabled ? '#6c63ff' : '#1a1a2e',
+                opacity: togglingReminder ? 0.6 : 1,
+              }}
+              onClick={!togglingReminder ? toggleReminders : undefined}
+            >
+              <div
+                style={{
+                  ...s.toggleKnob,
+                  left: remindersEnabled ? 23 : 3,
+                  background: remindersEnabled ? '#fff' : '#4a4870',
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: 'flex', gap: 20 }}>
@@ -246,7 +342,7 @@ export default function Dashboard() {
                       onMouseEnter={e => e.target.style.color = '#6c63ff'}
                       onMouseLeave={e => e.target.style.color = '#4a4870'}
                     >
-                      Stats
+                      Progress
                     </button>
                     <button
                       style={{ ...s.actionBtn, background: '#6c63ff', color: '#fff', border: 'none' }}
