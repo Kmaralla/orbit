@@ -1,6 +1,7 @@
-// Supabase Edge Function: Send Daily Check-in Reminders
+// Supabase Edge Function: Daily Check-in Digest
+// Sends ONE gentle email per user with all their orbits
 // Deploy: supabase functions deploy send-reminders
-// Schedule: Supabase Dashboard → Edge Functions → Schedules → */5 * * * * (every 5 min)
+// Schedule: Supabase Dashboard → Edge Functions → Schedules → 0 8 * * * (8am UTC daily)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -14,12 +15,10 @@ interface Usecase {
   name: string
   icon: string
   notify_email: string
-  notify_time: string
   user_id: string
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -28,7 +27,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const appUrl = Deno.env.get('APP_URL') || 'https://your-app.vercel.app'
+    const appUrl = Deno.env.get('APP_URL') || 'https://orbit-two-phi.vercel.app'
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Missing Supabase environment variables')
@@ -40,42 +39,61 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get current time in HH:MM format
-    const now = new Date()
-    const currentHour = now.getUTCHours().toString().padStart(2, '0')
-    const currentMinute = now.getUTCMinutes().toString().padStart(2, '0')
-    const currentTime = `${currentHour}:${currentMinute}`
-
-    // Also check times within a 5-minute window (since cron runs every 5 min)
-    const times: string[] = []
-    for (let i = 0; i < 5; i++) {
-      const checkTime = new Date(now.getTime() - i * 60000)
-      const h = checkTime.getUTCHours().toString().padStart(2, '0')
-      const m = checkTime.getUTCMinutes().toString().padStart(2, '0')
-      times.push(`${h}:${m}:00`) // Include seconds for time type
-    }
-
-    console.log(`Checking for reminders at times: ${times.join(', ')}`)
-
-    // Find usecases with reminders due now
+    // Get all orbits that have email reminders enabled
     const { data: usecases, error: fetchError } = await supabase
       .from('usecases')
-      .select('id, name, icon, notify_email, notify_time, user_id')
+      .select('id, name, icon, notify_email, user_id')
       .not('notify_email', 'is', null)
-      .not('notify_time', 'is', null)
-      .in('notify_time', times)
 
     if (fetchError) {
       console.error('Error fetching usecases:', fetchError)
       throw fetchError
     }
 
-    console.log(`Found ${usecases?.length || 0} usecases with reminders due`)
+    // Group orbits by email (one email per user)
+    const orbitsByEmail: Record<string, Usecase[]> = {}
+    for (const uc of (usecases as Usecase[]) ?? []) {
+      if (!orbitsByEmail[uc.notify_email]) {
+        orbitsByEmail[uc.notify_email] = []
+      }
+      orbitsByEmail[uc.notify_email].push(uc)
+    }
 
-    const results: { email: string; status: string; error?: string }[] = []
+    const emails = Object.keys(orbitsByEmail)
+    console.log(`Sending daily digest to ${emails.length} users`)
 
-    for (const usecase of (usecases as Usecase[]) ?? []) {
-      const checkInUrl = `${appUrl}/usecase/${usecase.id}`
+    const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
+
+    for (const email of emails) {
+      const orbits = orbitsByEmail[email]
+
+      // Build orbit links HTML
+      const orbitLinksHtml = orbits.map(uc => `
+        <tr>
+          <td style="padding: 12px 0; border-bottom: 1px solid #1a1a2e;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="width: 50px; font-size: 28px; vertical-align: middle;">
+                  ${uc.icon || '🎯'}
+                </td>
+                <td style="vertical-align: middle;">
+                  <div style="color: #e8e4f0; font-size: 16px; font-weight: 600; margin-bottom: 2px;">
+                    ${uc.name}
+                  </div>
+                </td>
+                <td style="text-align: right; vertical-align: middle;">
+                  <a href="${appUrl}/usecase/${uc.id}"
+                     style="display: inline-block; background: #6c63ff; color: #fff;
+                            padding: 8px 16px; border-radius: 8px; text-decoration: none;
+                            font-size: 13px; font-weight: 500;">
+                    Check in
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      `).join('')
 
       const emailHtml = `
 <!DOCTYPE html>
@@ -83,66 +101,74 @@ Deno.serve(async (req) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Orbit Check-in Reminder</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #080810; font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #080810; padding: 40px 20px;">
+<body style="margin: 0; padding: 0; background-color: #080810; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #080810; padding: 32px 16px;">
     <tr>
       <td align="center">
-        <table width="100%" max-width="500" cellpadding="0" cellspacing="0" style="max-width: 500px;">
-          <!-- Logo -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px;">
+
+          <!-- Header -->
           <tr>
-            <td align="center" style="padding-bottom: 30px;">
-              <span style="font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; color: #e8e4f0;">
-                <span style="color: #6c63ff;">O</span>rbit
-              </span>
+            <td style="padding-bottom: 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <span style="font-size: 22px; font-weight: 700; color: #e8e4f0;">
+                      <span style="color: #6c63ff;">●</span> Orbit
+                    </span>
+                  </td>
+                  <td style="text-align: right; color: #4a4870; font-size: 13px;">
+                    Daily Check-in
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
-          <!-- Card -->
+          <!-- Greeting -->
           <tr>
-            <td style="background-color: #0d0d1a; border-radius: 16px; border: 1px solid #1a1a2e; padding: 32px;">
-              <!-- Icon -->
-              <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">
-                ${usecase.icon || '🎯'}
-              </div>
-
-              <!-- Title -->
-              <h1 style="color: #e8e4f0; font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 600; text-align: center; margin: 0 0 12px 0;">
-                Time for your check-in!
+            <td style="padding-bottom: 20px;">
+              <h1 style="color: #e8e4f0; font-size: 20px; font-weight: 600; margin: 0 0 8px 0;">
+                Hey! Quick check-in time
               </h1>
-
-              <!-- Orbit name -->
-              <p style="color: #9b8fb8; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-                ${usecase.name}
+              <p style="color: #6b6890; font-size: 14px; margin: 0; line-height: 1.5;">
+                ${orbits.length === 1
+                  ? "Here's your orbit for today. Takes 30 seconds."
+                  : `You have ${orbits.length} orbits to check. Takes a minute.`}
               </p>
+            </td>
+          </tr>
 
-              <!-- CTA Button -->
-              <div style="text-align: center;">
-                <a href="${checkInUrl}" style="display: inline-block; background: linear-gradient(135deg, #6c63ff, #9b59b6); color: #ffffff; font-weight: 600; font-size: 16px; padding: 14px 32px; border-radius: 12px; text-decoration: none;">
-                  Check In Now
-                </a>
-              </div>
+          <!-- Orbit Cards -->
+          <tr>
+            <td style="background-color: #0d0d1a; border-radius: 16px; border: 1px solid #1a1a2e; padding: 8px 20px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${orbitLinksHtml}
+              </table>
+            </td>
+          </tr>
 
-              <!-- Direct link -->
-              <p style="color: #4a4870; font-size: 12px; text-align: center; margin: 24px 0 0 0;">
-                Or copy this link:<br>
-                <a href="${checkInUrl}" style="color: #6c63ff; text-decoration: none; word-break: break-all;">
-                  ${checkInUrl}
-                </a>
-              </p>
+          <!-- Dashboard Link -->
+          <tr>
+            <td style="padding-top: 20px; text-align: center;">
+              <a href="${appUrl}/dashboard"
+                 style="color: #6c63ff; font-size: 13px; text-decoration: none;">
+                Open Dashboard →
+              </a>
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding-top: 24px; text-align: center;">
-              <p style="color: #4a4870; font-size: 12px; margin: 0;">
-                You're receiving this because you set a reminder for "${usecase.name}".<br>
-                To stop these emails, edit your orbit settings.
+            <td style="padding-top: 32px; text-align: center;">
+              <p style="color: #3a3858; font-size: 11px; margin: 0;">
+                You're receiving this because you enabled reminders.<br>
+                Edit your orbit to change notification settings.
               </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -159,9 +185,11 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Orbit <reminders@orbit.app>', // Update with your verified domain
-            to: usecase.notify_email,
-            subject: `${usecase.icon || '⏰'} Time for your ${usecase.name} check-in`,
+            from: 'Orbit <hello@resend.dev>', // Use your verified domain
+            to: email,
+            subject: orbits.length === 1
+              ? `${orbits[0].icon || '○'} Check in: ${orbits[0].name}`
+              : `○ Daily check-in · ${orbits.length} orbits`,
             html: emailHtml,
           }),
         })
@@ -169,52 +197,31 @@ Deno.serve(async (req) => {
         const responseData = await response.json()
 
         if (!response.ok) {
-          console.error(`Failed to send email to ${usecase.notify_email}:`, responseData)
-          results.push({
-            email: usecase.notify_email,
-            status: 'failed',
-            error: responseData.message || 'Unknown error',
-          })
+          console.error(`Failed to send to ${email}:`, responseData)
+          results.push({ email, status: 'failed', orbitCount: orbits.length, error: responseData.message })
         } else {
-          console.log(`Email sent successfully to ${usecase.notify_email}`)
-          results.push({
-            email: usecase.notify_email,
-            status: 'sent',
-          })
+          console.log(`Sent digest to ${email} (${orbits.length} orbits)`)
+          results.push({ email, status: 'sent', orbitCount: orbits.length })
         }
       } catch (emailError) {
-        console.error(`Error sending email to ${usecase.notify_email}:`, emailError)
-        results.push({
-          email: usecase.notify_email,
-          status: 'error',
-          error: String(emailError),
-        })
+        console.error(`Error sending to ${email}:`, emailError)
+        results.push({ email, status: 'error', orbitCount: orbits.length, error: String(emailError) })
       }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        checked_time: currentTime,
-        reminders_found: usecases?.length || 0,
+        usersNotified: emails.length,
         results,
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
     console.error('Edge function error:', error)
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: String(error),
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
+      JSON.stringify({ success: false, error: String(error) }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
 })
