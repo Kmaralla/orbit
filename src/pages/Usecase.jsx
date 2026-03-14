@@ -140,25 +140,27 @@ export default function Usecase() {
       outline: 'none',
     },
     deleteBtn: {
-      background: 'none',
-      border: 'none',
-      color: '#2a2840',
+      background: '#1a1a2e',
+      border: '1px solid #2a2a40',
+      borderRadius: 6,
+      color: '#8a8090',
       cursor: 'pointer',
-      fontSize: 16,
-      padding: 4,
+      fontSize: 14,
+      padding: '6px 10px',
+      transition: 'all 0.15s',
     },
     addItemBtn: {
       width: '100%',
-      background: 'transparent',
-      border: '1px dashed #2a2840',
+      background: '#0d0d1a',
+      border: '1px dashed #3a3858',
       borderRadius: 16,
       padding: '16px',
-      color: '#3a3858',
+      color: '#6a6888',
       cursor: 'pointer',
       fontSize: 14,
       marginTop: 8,
       fontFamily: 'DM Sans, sans-serif',
-      transition: 'border-color 0.2s, color 0.2s',
+      transition: 'all 0.2s',
     },
     modal: {
       position: 'fixed', inset: 0, background: '#000a',
@@ -285,7 +287,13 @@ export default function Usecase() {
                   />
                 )}
 
-                <button style={s.deleteBtn} onClick={() => deleteItem(item.id)} title="Delete item">✕</button>
+                <button
+                  style={s.deleteBtn}
+                  onClick={() => deleteItem(item.id)}
+                  onMouseEnter={e => { e.target.style.background = '#3a2020'; e.target.style.borderColor = '#5a3030'; e.target.style.color = '#ff6b6b' }}
+                  onMouseLeave={e => { e.target.style.background = '#1a1a2e'; e.target.style.borderColor = '#2a2a40'; e.target.style.color = '#8a8090' }}
+                  title="Delete item"
+                >✕</button>
               </div>
             </div>
           ))

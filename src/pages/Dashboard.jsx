@@ -147,14 +147,15 @@ export default function Dashboard() {
     },
     actions: { display: 'flex', gap: 8 },
     actionBtn: {
-      background: 'transparent',
-      border: '1px solid #1e1e32',
+      background: '#1a1a2e',
+      border: '1px solid #2a2a40',
       borderRadius: 8,
       padding: '6px 14px',
       fontSize: 12,
       cursor: 'pointer',
-      color: '#4a4870',
+      color: '#a8a0c0',
       fontFamily: 'DM Sans, sans-serif',
+      transition: 'all 0.15s',
     },
     reminderBadge: {
       display: 'inline-flex',
@@ -169,17 +170,18 @@ export default function Dashboard() {
       marginLeft: 8,
     },
     copyBtn: {
-      background: 'transparent',
-      border: '1px solid #1e1e32',
+      background: '#1a1a2e',
+      border: '1px solid #2a2a40',
       borderRadius: 8,
       padding: '6px 10px',
       fontSize: 12,
       cursor: 'pointer',
-      color: '#4a4870',
+      color: '#a8a0c0',
       fontFamily: 'DM Sans, sans-serif',
       display: 'flex',
       alignItems: 'center',
       gap: 4,
+      transition: 'all 0.15s',
     },
     emptyState: {
       textAlign: 'center',
@@ -330,8 +332,8 @@ export default function Dashboard() {
                     <button
                       style={{ ...s.copyBtn, ...(copiedId === uc.id ? { background: '#1a3a1a', borderColor: '#3d6a3d', color: '#7dba7d' } : {}) }}
                       onClick={(e) => copyOrbitLink(uc.id, e)}
-                      onMouseEnter={e => { if (copiedId !== uc.id) e.target.style.color = '#6c63ff' }}
-                      onMouseLeave={e => { if (copiedId !== uc.id) e.target.style.color = '#4a4870' }}
+                      onMouseEnter={e => { if (copiedId !== uc.id) { e.target.style.background = '#2a2a40'; e.target.style.borderColor = '#6c63ff' } }}
+                      onMouseLeave={e => { if (copiedId !== uc.id) { e.target.style.background = '#1a1a2e'; e.target.style.borderColor = '#2a2a40' } }}
                       title="Copy check-in link"
                     >
                       {copiedId === uc.id ? '✓ Copied!' : '🔗'}
@@ -339,8 +341,8 @@ export default function Dashboard() {
                     <button
                       style={s.actionBtn}
                       onClick={(e) => { e.stopPropagation(); navigate(`/usecase/${uc.id}/stats`) }}
-                      onMouseEnter={e => e.target.style.color = '#6c63ff'}
-                      onMouseLeave={e => e.target.style.color = '#4a4870'}
+                      onMouseEnter={e => { e.target.style.background = '#2a2a40'; e.target.style.color = '#c8c0e0'; e.target.style.borderColor = '#6c63ff' }}
+                      onMouseLeave={e => { e.target.style.background = '#1a1a2e'; e.target.style.color = '#a8a0c0'; e.target.style.borderColor = '#2a2a40' }}
                     >
                       Progress
                     </button>
