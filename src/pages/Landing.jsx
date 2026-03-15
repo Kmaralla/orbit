@@ -445,7 +445,7 @@ export default function Landing() {
         </div>
 
         <div style={s.footer}>
-          Free forever · Powered by Claude AI
+          Free forever · Powered by Claude AI · <span style={{ color: colors.textMuted, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => navigate('/privacy')}>Privacy</span>
         </div>
       </div>
 

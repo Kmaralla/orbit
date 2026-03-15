@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Usecase from './pages/Usecase'
 import Stats from './pages/Stats'
+import Privacy from './pages/Privacy'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -25,6 +26,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Landing />} />
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/usecase/:id" element={<ProtectedRoute><Usecase /></ProtectedRoute>} />
             <Route path="/usecase/:id/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
