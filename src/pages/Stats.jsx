@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import { getClaudeAnalysis } from '../lib/claude'
 import Navbar from '../components/Navbar'
 import { format, subDays, startOfWeek, eachDayOfInterval, isWeekend, getDay } from 'date-fns'
@@ -10,6 +11,7 @@ import { format, subDays, startOfWeek, eachDayOfInterval, isWeekend, getDay } fr
 export default function Stats() {
   const { id } = useParams()
   const { user } = useAuth()
+  const { colors } = useTheme()
   const navigate = useNavigate()
   const [usecase, setUsecase] = useState(null)
   const [items, setItems] = useState([])
@@ -176,35 +178,35 @@ export default function Stats() {
     : 0
 
   const s = {
-    page: { minHeight: '100vh', background: '#080810' },
+    page: { minHeight: '100vh', background: colors.bg },
     content: { maxWidth: 900, margin: '0 auto', padding: '40px 24px' },
-    back: { background: 'none', border: 'none', color: '#4a4870', cursor: 'pointer', fontSize: 14, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'DM Sans, sans-serif' },
+    back: { background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 14, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Nunito, sans-serif' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36 },
-    title: { fontFamily: 'Syne, sans-serif', fontSize: 28, fontWeight: 800, color: '#e8e4f0', display: 'flex', alignItems: 'center', gap: 12 },
-    periodToggle: { display: 'flex', background: '#0d0d1a', border: '1px solid #1a1a2e', borderRadius: 10, overflow: 'hidden' },
-    periodBtn: { padding: '8px 20px', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s' },
-    card: { background: '#0d0d1a', border: '1px solid #1a1a2e', borderRadius: 20, padding: 28, marginBottom: 20 },
-    cardTitle: { fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: '#e8e4f0', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 },
+    title: { fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 800, color: colors.text, display: 'flex', alignItems: 'center', gap: 12 },
+    periodToggle: { display: 'flex', background: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: 10, overflow: 'hidden' },
+    periodBtn: { padding: '8px 20px', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'Nunito, sans-serif', transition: 'all 0.2s' },
+    card: { background: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: 20, padding: 28, marginBottom: 20 },
+    cardTitle: { fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: colors.text, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 },
     statRow: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 },
-    statLabel: { flex: 1, fontSize: 14, color: '#c8c0e0' },
-    statBar: { width: 140, height: 6, background: '#1a1a2e', borderRadius: 4, overflow: 'hidden' },
-    statFill: { height: '100%', background: 'linear-gradient(90deg, #6c63ff, #9b59b6)', borderRadius: 4, transition: 'width 0.6s ease' },
-    statVal: { fontSize: 13, color: '#6c63ff', width: 80, textAlign: 'right', fontFamily: 'monospace' },
+    statLabel: { flex: 1, fontSize: 14, color: colors.textMuted },
+    statBar: { width: 140, height: 6, background: colors.border, borderRadius: 4, overflow: 'hidden' },
+    statFill: { height: '100%', background: colors.accentGradient, borderRadius: 4, transition: 'width 0.6s ease' },
+    statVal: { fontSize: 13, color: colors.accent, width: 80, textAlign: 'right', fontFamily: 'monospace' },
     aiBtn: {
-      background: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
+      background: colors.accentGradient,
       border: 'none', borderRadius: 12, padding: '14px 28px',
       color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-      fontFamily: 'DM Sans, sans-serif', width: '100%', marginBottom: 20,
+      fontFamily: 'Nunito, sans-serif', width: '100%', marginBottom: 20,
     },
-    analysisCard: { background: '#0a0a1a', border: '1px solid #2a2a40', borderRadius: 16, padding: 28, marginBottom: 20 },
-    trendText: { fontSize: 15, color: '#c8c0e0', lineHeight: 1.7, marginBottom: 24 },
-    sectionTitle: { fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 700, color: '#6c63ff', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 },
-    listItem: { fontSize: 14, color: '#a89fff', lineHeight: 1.6, marginBottom: 8, paddingLeft: 12, borderLeft: '2px solid #6c63ff44' },
-    nextStep: { fontSize: 14, color: '#e8e4f0', lineHeight: 1.6, marginBottom: 8, paddingLeft: 12, borderLeft: '2px solid #9b59b6' },
-    tooltipStyle: { background: '#0d0d1a', border: '1px solid #2a2a40', borderRadius: 8, fontSize: 12, color: '#e8e4f0' },
+    analysisCard: { background: colors.bgInput, border: `1px solid ${colors.borderLight}`, borderRadius: 16, padding: 28, marginBottom: 20 },
+    trendText: { fontSize: 15, color: colors.textMuted, lineHeight: 1.7, marginBottom: 24 },
+    sectionTitle: { fontFamily: 'Nunito, sans-serif', fontSize: 13, fontWeight: 700, color: colors.accent, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 12 },
+    listItem: { fontSize: 14, color: colors.accent, lineHeight: 1.6, marginBottom: 8, paddingLeft: 12, borderLeft: `2px solid ${colors.accent}44` },
+    nextStep: { fontSize: 14, color: colors.text, lineHeight: 1.6, marginBottom: 8, paddingLeft: 12, borderLeft: '2px solid #9b59b6' },
+    tooltipStyle: { background: colors.bgCard, border: `1px solid ${colors.borderLight}`, borderRadius: 8, fontSize: 12, color: colors.text },
     focusCard: {
-      background: 'linear-gradient(135deg, #1a1520 0%, #0d0d1a 100%)',
-      border: '1px solid #3d2a4a',
+      background: colors.name === 'dark' ? 'linear-gradient(135deg, #1a1520 0%, #0d0d1a 100%)' : 'linear-gradient(135deg, #f5f0fa 0%, #fff 100%)',
+      border: `1px solid ${colors.name === 'dark' ? '#3d2a4a' : '#d8c8e8'}`,
       borderRadius: 20,
       padding: 28,
       marginBottom: 20,
@@ -214,10 +216,10 @@ export default function Stats() {
       alignItems: 'center',
       gap: 12,
       padding: '12px 16px',
-      background: '#0a0a14',
+      background: colors.bgInput,
       borderRadius: 12,
       marginBottom: 8,
-      border: '1px solid #2a1a3a',
+      border: `1px solid ${colors.border}`,
     },
     focusPct: {
       width: 44,
@@ -233,11 +235,11 @@ export default function Stats() {
     focusLabel: {
       flex: 1,
       fontSize: 14,
-      color: '#e8e4f0',
+      color: colors.text,
     },
     focusTip: {
       fontSize: 12,
-      color: '#9b8fb8',
+      color: colors.textMuted,
       marginTop: 2,
     },
     overallScore: {
@@ -254,12 +256,12 @@ export default function Stats() {
       justifyContent: 'center',
       fontSize: 28,
       fontWeight: 800,
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       marginBottom: 8,
     },
     scoreLabel: {
       fontSize: 14,
-      color: '#4a4870',
+      color: colors.textDim,
     },
   }
 
@@ -268,7 +270,7 @@ export default function Stats() {
       return (
         <div style={s.tooltipStyle}>
           <div style={{ padding: '8px 12px' }}>
-            <div style={{ color: '#6c63ff', marginBottom: 4 }}>{label}</div>
+            <div style={{ color: colors.accent, marginBottom: 4 }}>{label}</div>
             <div>{payload[0]?.value}% completion</div>
           </div>
         </div>
@@ -277,7 +279,7 @@ export default function Stats() {
     return null
   }
 
-  if (loading) return <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: '#4a4870' }}>Loading...</div></div>
+  if (loading) return <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: colors.textDim }}>Loading...</div></div>
 
   return (
     <div style={s.page}>
@@ -296,8 +298,8 @@ export default function Stats() {
                 key={p}
                 style={{
                   ...s.periodBtn,
-                  background: period === p ? '#6c63ff' : 'transparent',
-                  color: period === p ? '#fff' : '#4a4870',
+                  background: period === p ? colors.accent : 'transparent',
+                  color: period === p ? '#fff' : colors.textDim,
                 }}
                 onClick={() => setPeriod(p)}
               >
@@ -364,10 +366,10 @@ export default function Stats() {
           <div style={s.cardTitle}>📈 Daily Completion Rate</div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={chartData} barSize={period === 'week' ? 32 : 12}>
-              <XAxis dataKey="date" tick={{ fill: '#3a3858', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#3a3858', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} unit="%" />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#6c63ff11' }} />
-              <Bar dataKey="completion" fill="#6c63ff" radius={[4,4,0,0]} />
+              <XAxis dataKey="date" tick={{ fill: colors.textDim, fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: colors.textDim, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} unit="%" />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: colors.accent + '11' }} />
+              <Bar dataKey="completion" fill={colors.accent} radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -376,7 +378,7 @@ export default function Stats() {
         <div style={s.card}>
           <div style={s.cardTitle}>📋 Item Breakdown</div>
           {itemStats.length === 0 ? (
-            <div style={{ color: '#2a2840', fontSize: 14 }}>No items added yet.</div>
+            <div style={{ color: colors.textDim, fontSize: 14 }}>No items added yet.</div>
           ) : (
             itemStats.map(item => (
               <div key={item.id} style={s.statRow}>
@@ -422,7 +424,7 @@ export default function Stats() {
               ))}
 
               <button
-                style={{ ...s.aiBtn, marginTop: 20, marginBottom: 0, background: 'transparent', border: '1px solid #2a2a40', color: '#4a4870', fontSize: 13 }}
+                style={{ ...s.aiBtn, marginTop: 20, marginBottom: 0, background: 'transparent', border: `1px solid ${colors.borderLight}`, color: colors.textDim, fontSize: 13 }}
                 onClick={() => { setAnalysis(null) }}
               >
                 Regenerate Analysis

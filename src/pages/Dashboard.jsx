@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 
@@ -9,6 +10,7 @@ const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯',
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { colors } = useTheme()
   const navigate = useNavigate()
   const [usecases, setUsecases] = useState([])
   const [loading, setLoading] = useState(true)
@@ -87,19 +89,19 @@ export default function Dashboard() {
   }
 
   const s = {
-    page: { minHeight: '100vh', background: '#080810' },
+    page: { minHeight: '100vh', background: colors.bg },
     content: { maxWidth: 1100, margin: '0 auto', padding: '40px 24px' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 48 },
     greeting: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: 36,
       fontWeight: 700,
-      color: '#e8e4f0',
+      color: colors.text,
       letterSpacing: '-1px',
     },
-    greetingSub: { fontSize: 15, color: '#4a4870', marginTop: 6 },
+    greetingSub: { fontSize: 15, color: colors.textDim, marginTop: 6 },
     addBtn: {
-      background: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
+      background: colors.accentGradient,
       border: 'none',
       borderRadius: 12,
       padding: '12px 24px',
@@ -110,7 +112,7 @@ export default function Dashboard() {
       display: 'flex',
       alignItems: 'center',
       gap: 8,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     grid: {
       display: 'grid',
@@ -118,8 +120,8 @@ export default function Dashboard() {
       gap: 20,
     },
     card: {
-      background: '#0d0d1a',
-      border: '1px solid #1a1a2e',
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
       borderRadius: 20,
       padding: '28px',
       cursor: 'pointer',
@@ -129,32 +131,32 @@ export default function Dashboard() {
     },
     cardIcon: { fontSize: 40, marginBottom: 16 },
     cardName: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: 20,
       fontWeight: 700,
-      color: '#e8e4f0',
+      color: colors.text,
       marginBottom: 6,
     },
-    cardDesc: { fontSize: 13, color: '#4a4870', lineHeight: 1.5, marginBottom: 20 },
+    cardDesc: { fontSize: 13, color: colors.textDim, lineHeight: 1.5, marginBottom: 20 },
     cardFooter: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
     badge: {
-      background: '#6c63ff22',
-      border: '1px solid #6c63ff44',
+      background: colors.accent + '22',
+      border: `1px solid ${colors.accent}44`,
       borderRadius: 8,
       padding: '5px 12px',
       fontSize: 12,
-      color: '#6c63ff',
+      color: colors.accent,
     },
     actions: { display: 'flex', gap: 8 },
     actionBtn: {
-      background: '#1a1a2e',
-      border: '1px solid #2a2a40',
+      background: colors.border,
+      border: `1px solid ${colors.borderLight}`,
       borderRadius: 8,
       padding: '6px 14px',
       fontSize: 12,
       cursor: 'pointer',
-      color: '#a8a0c0',
-      fontFamily: 'DM Sans, sans-serif',
+      color: colors.textMuted,
+      fontFamily: 'Nunito, sans-serif',
       transition: 'all 0.15s',
     },
     reminderBadge: {
@@ -170,14 +172,14 @@ export default function Dashboard() {
       marginLeft: 8,
     },
     copyBtn: {
-      background: '#1a1a2e',
-      border: '1px solid #2a2a40',
+      background: colors.border,
+      border: `1px solid ${colors.borderLight}`,
       borderRadius: 8,
       padding: '6px 10px',
       fontSize: 12,
       cursor: 'pointer',
-      color: '#a8a0c0',
-      fontFamily: 'DM Sans, sans-serif',
+      color: colors.textMuted,
+      fontFamily: 'Nunito, sans-serif',
       display: 'flex',
       alignItems: 'center',
       gap: 4,
@@ -186,22 +188,22 @@ export default function Dashboard() {
     emptyState: {
       textAlign: 'center',
       padding: '80px 20px',
-      color: '#2a2840',
+      color: colors.textDim,
     },
     emptyIcon: { fontSize: 64, marginBottom: 16, display: 'block' },
     emptyTitle: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: 24,
-      color: '#3a3860',
+      color: colors.textMuted,
       marginBottom: 8,
     },
-    emptyText: { fontSize: 15, color: '#2a2840', marginBottom: 24 },
+    emptyText: { fontSize: 15, color: colors.textDim, marginBottom: 24 },
     reminderToggle: {
       display: 'flex',
       alignItems: 'center',
       gap: 12,
-      background: '#0d0d1a',
-      border: '1px solid #1a1a2e',
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
       borderRadius: 12,
       padding: '12px 16px',
       marginBottom: 24,
@@ -210,7 +212,7 @@ export default function Dashboard() {
       width: 44,
       height: 24,
       borderRadius: 12,
-      background: '#1a1a2e',
+      background: colors.border,
       position: 'relative',
       cursor: 'pointer',
       transition: 'background 0.2s',
@@ -219,7 +221,7 @@ export default function Dashboard() {
       width: 18,
       height: 18,
       borderRadius: '50%',
-      background: '#4a4870',
+      background: colors.textDim,
       position: 'absolute',
       top: 3,
       left: 3,
@@ -227,12 +229,12 @@ export default function Dashboard() {
     },
     toggleLabel: {
       fontSize: 14,
-      color: '#e8e4f0',
+      color: colors.text,
       flex: 1,
     },
     toggleSub: {
       fontSize: 12,
-      color: '#4a4870',
+      color: colors.textDim,
     },
   }
 
@@ -270,7 +272,7 @@ export default function Dashboard() {
             <div
               style={{
                 ...s.toggleSwitch,
-                background: remindersEnabled ? '#6c63ff' : '#1a1a2e',
+                background: remindersEnabled ? colors.accent : colors.border,
                 opacity: togglingReminder ? 0.6 : 1,
               }}
               onClick={!togglingReminder ? toggleReminders : undefined}
@@ -279,7 +281,7 @@ export default function Dashboard() {
                 style={{
                   ...s.toggleKnob,
                   left: remindersEnabled ? 23 : 3,
-                  background: remindersEnabled ? '#fff' : '#4a4870',
+                  background: remindersEnabled ? '#fff' : colors.textDim,
                 }}
               />
             </div>
@@ -289,7 +291,7 @@ export default function Dashboard() {
         {loading ? (
           <div style={{ display: 'flex', gap: 20 }}>
             {[1,2,3].map(i => (
-              <div key={i} style={{ ...s.card, height: 180, background: '#0d0d1a', animation: 'pulse 1.5s ease infinite' }} />
+              <div key={i} style={{ ...s.card, height: 180, background: colors.bgCard, animation: 'pulse 1.5s ease infinite' }} />
             ))}
           </div>
         ) : usecases.length === 0 ? (
@@ -307,11 +309,11 @@ export default function Dashboard() {
               <div
                 key={uc.id}
                 style={s.card}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#6c63ff66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#1a1a2e'; e.currentTarget.style.transform = 'translateY(0)' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent + '66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
               >
                 {/* Subtle gradient top accent */}
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #6c63ff, #9b59b6)', borderRadius: '20px 20px 0 0' }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: colors.accentGradient, borderRadius: '20px 20px 0 0' }} />
 
                 <div style={s.cardIcon}>{uc.icon}</div>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -332,8 +334,8 @@ export default function Dashboard() {
                     <button
                       style={{ ...s.copyBtn, ...(copiedId === uc.id ? { background: '#1a3a1a', borderColor: '#3d6a3d', color: '#7dba7d' } : {}) }}
                       onClick={(e) => copyOrbitLink(uc.id, e)}
-                      onMouseEnter={e => { if (copiedId !== uc.id) { e.target.style.background = '#2a2a40'; e.target.style.borderColor = '#6c63ff' } }}
-                      onMouseLeave={e => { if (copiedId !== uc.id) { e.target.style.background = '#1a1a2e'; e.target.style.borderColor = '#2a2a40' } }}
+                      onMouseEnter={e => { if (copiedId !== uc.id) { e.target.style.background = colors.borderLight; e.target.style.borderColor = colors.accent } }}
+                      onMouseLeave={e => { if (copiedId !== uc.id) { e.target.style.background = colors.border; e.target.style.borderColor = colors.borderLight } }}
                       title="Copy check-in link"
                     >
                       {copiedId === uc.id ? '✓ Copied!' : '🔗'}
@@ -341,13 +343,13 @@ export default function Dashboard() {
                     <button
                       style={s.actionBtn}
                       onClick={(e) => { e.stopPropagation(); navigate(`/usecase/${uc.id}/stats`) }}
-                      onMouseEnter={e => { e.target.style.background = '#2a2a40'; e.target.style.color = '#c8c0e0'; e.target.style.borderColor = '#6c63ff' }}
-                      onMouseLeave={e => { e.target.style.background = '#1a1a2e'; e.target.style.color = '#a8a0c0'; e.target.style.borderColor = '#2a2a40' }}
+                      onMouseEnter={e => { e.target.style.background = colors.borderLight; e.target.style.color = colors.text; e.target.style.borderColor = colors.accent }}
+                      onMouseLeave={e => { e.target.style.background = colors.border; e.target.style.color = colors.textMuted; e.target.style.borderColor = colors.borderLight }}
                     >
                       Progress
                     </button>
                     <button
-                      style={{ ...s.actionBtn, background: '#6c63ff', color: '#fff', border: 'none' }}
+                      style={{ ...s.actionBtn, background: colors.accent, color: '#fff', border: 'none' }}
                       onClick={() => navigate(`/usecase/${uc.id}`)}
                     >
                       Check In →

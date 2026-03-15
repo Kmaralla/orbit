@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import Navbar from '../components/Navbar'
 
 const VALUE_TYPES = [
@@ -31,6 +32,7 @@ const DAYS_OF_WEEK = [
 export default function Usecase() {
   const { id } = useParams()
   const { user } = useAuth()
+  const { colors } = useTheme()
   const navigate = useNavigate()
   const [usecase, setUsecase] = useState(null)
   const [items, setItems] = useState([])
@@ -121,18 +123,18 @@ export default function Usecase() {
   const progress = items.length > 0 ? (completedCount / items.length) * 100 : 0
 
   const s = {
-    page: { minHeight: '100vh', background: '#080810' },
+    page: { minHeight: '100vh', background: colors.bg },
     content: { maxWidth: 800, margin: '0 auto', padding: '40px 24px' },
-    back: { background: 'none', border: 'none', color: '#4a4870', cursor: 'pointer', fontSize: 14, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'DM Sans, sans-serif' },
+    back: { background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 14, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Nunito, sans-serif' },
     header: { marginBottom: 36 },
-    ucTitle: { fontFamily: 'Syne, sans-serif', fontSize: 32, fontWeight: 800, color: '#e8e4f0', letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 },
-    progressBar: { background: '#1a1a2e', borderRadius: 8, height: 6, marginTop: 16, overflow: 'hidden' },
-    progressFill: { height: '100%', background: 'linear-gradient(90deg, #6c63ff, #9b59b6)', borderRadius: 8, transition: 'width 0.5s ease' },
-    progressText: { fontSize: 13, color: '#4a4870', marginTop: 8 },
-    dateLabel: { fontSize: 13, color: '#6c63ff', marginBottom: 24, fontFamily: 'DM Sans, sans-serif' },
+    ucTitle: { fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 800, color: colors.text, letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 },
+    progressBar: { background: colors.border, borderRadius: 8, height: 6, marginTop: 16, overflow: 'hidden' },
+    progressFill: { height: '100%', background: colors.accentGradient, borderRadius: 8, transition: 'width 0.5s ease' },
+    progressText: { fontSize: 13, color: colors.textDim, marginTop: 8 },
+    dateLabel: { fontSize: 13, color: colors.accent, marginBottom: 24, fontFamily: 'Nunito, sans-serif' },
     itemCard: {
-      background: '#0d0d1a',
-      border: '1px solid #1a1a2e',
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
       borderRadius: 16,
       padding: '20px 24px',
       marginBottom: 12,
@@ -141,41 +143,41 @@ export default function Usecase() {
       gap: 20,
       transition: 'border-color 0.2s',
     },
-    itemLabel: { fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#e8e4f0', marginBottom: 2 },
-    itemDesc: { fontSize: 12, color: '#3a3858' },
+    itemLabel: { fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 600, color: colors.text, marginBottom: 2 },
+    itemDesc: { fontSize: 12, color: colors.textDim },
     itemControl: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 },
-    checkbox: { width: 24, height: 24, accentColor: '#6c63ff', cursor: 'pointer' },
+    checkbox: { width: 24, height: 24, accentColor: colors.accent, cursor: 'pointer' },
     scoreBtn: {
       width: 36, height: 36, borderRadius: 8,
-      border: '1px solid #1e1e32',
+      border: `1px solid ${colors.border}`,
       background: 'transparent',
-      color: '#4a4870',
+      color: colors.textDim,
       cursor: 'pointer',
       fontSize: 14,
       fontFamily: 'monospace',
       transition: 'all 0.15s',
     },
     scoreBtnActive: {
-      background: '#6c63ff',
-      borderColor: '#6c63ff',
+      background: colors.accent,
+      borderColor: colors.accent,
       color: '#fff',
     },
     textInput: {
-      background: '#0a0a16',
-      border: '1px solid #1e1e32',
+      background: colors.bgInput,
+      border: `1px solid ${colors.border}`,
       borderRadius: 10,
       padding: '8px 14px',
-      color: '#e8e4f0',
+      color: colors.text,
       fontSize: 14,
       width: 160,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       outline: 'none',
     },
     deleteBtn: {
-      background: '#1a1a2e',
-      border: '1px solid #2a2a40',
+      background: colors.border,
+      border: `1px solid ${colors.borderLight}`,
       borderRadius: 6,
-      color: '#8a8090',
+      color: colors.textMuted,
       cursor: 'pointer',
       fontSize: 14,
       padding: '6px 10px',
@@ -183,15 +185,15 @@ export default function Usecase() {
     },
     addItemBtn: {
       width: '100%',
-      background: '#0d0d1a',
-      border: '1px dashed #3a3858',
+      background: colors.bgCard,
+      border: `1px dashed ${colors.textDim}`,
       borderRadius: 16,
       padding: '16px',
-      color: '#6a6888',
+      color: colors.textMuted,
       cursor: 'pointer',
       fontSize: 14,
       marginTop: 8,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       transition: 'all 0.2s',
     },
     modal: {
@@ -199,71 +201,71 @@ export default function Usecase() {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50
     },
     modalBox: {
-      background: '#0d0d1a', border: '1px solid #2a2a40',
+      background: colors.bgCard, border: `1px solid ${colors.borderLight}`,
       borderRadius: 20, padding: 32, width: '100%', maxWidth: 440,
     },
-    modalTitle: { fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 700, color: '#e8e4f0', marginBottom: 24 },
-    label: { fontSize: 12, color: '#4a4870', marginBottom: 6, display: 'block', letterSpacing: '0.5px', textTransform: 'uppercase' },
+    modalTitle: { fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 700, color: colors.text, marginBottom: 24 },
+    label: { fontSize: 12, color: colors.textDim, marginBottom: 6, display: 'block', letterSpacing: '0.5px', textTransform: 'uppercase' },
     input: {
-      width: '100%', background: '#080810', border: '1px solid #1e1e32',
-      borderRadius: 10, padding: '12px 16px', color: '#e8e4f0', fontSize: 14,
-      fontFamily: 'DM Sans, sans-serif', outline: 'none', marginBottom: 16,
+      width: '100%', background: colors.bgInput, border: `1px solid ${colors.border}`,
+      borderRadius: 10, padding: '12px 16px', color: colors.text, fontSize: 14,
+      fontFamily: 'Nunito, sans-serif', outline: 'none', marginBottom: 16,
     },
     typeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 },
     freqGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginBottom: 20 },
     freqBtn: {
-      background: '#080810',
-      border: '1px solid #1e1e32',
+      background: colors.bgInput,
+      border: `1px solid ${colors.border}`,
       borderRadius: 8,
       padding: '8px 6px',
       cursor: 'pointer',
       fontSize: 12,
-      color: '#6a6888',
+      color: colors.textMuted,
       textAlign: 'center',
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       transition: 'all 0.15s',
     },
-    freqBtnActive: { borderColor: '#6c63ff', color: '#a8a0ff', background: '#6c63ff11' },
-    freqDesc: { fontSize: 10, color: '#4a4870', marginTop: 2 },
+    freqBtnActive: { borderColor: colors.accent, color: colors.accent, background: colors.accent + '11' },
+    freqDesc: { fontSize: 10, color: colors.textDim, marginTop: 2 },
     daysGrid: { display: 'flex', gap: 6, marginBottom: 20, marginTop: 10 },
     dayBtn: {
       width: 36,
       height: 36,
       borderRadius: '50%',
-      background: '#080810',
-      border: '1px solid #1e1e32',
+      background: colors.bgInput,
+      border: `1px solid ${colors.border}`,
       cursor: 'pointer',
       fontSize: 12,
       fontWeight: 600,
-      color: '#6a6888',
+      color: colors.textMuted,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       transition: 'all 0.15s',
     },
-    dayBtnActive: { borderColor: '#6c63ff', color: '#fff', background: '#6c63ff' },
+    dayBtnActive: { borderColor: colors.accent, color: '#fff', background: colors.accent },
     typeBtn: {
-      background: '#080810', border: '1px solid #1e1e32',
+      background: colors.bgInput, border: `1px solid ${colors.border}`,
       borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
-      fontSize: 13, color: '#4a4870', textAlign: 'left',
-      fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s',
+      fontSize: 13, color: colors.textDim, textAlign: 'left',
+      fontFamily: 'Nunito, sans-serif', transition: 'all 0.15s',
     },
-    typeBtnActive: { borderColor: '#6c63ff', color: '#6c63ff', background: '#6c63ff11' },
+    typeBtnActive: { borderColor: colors.accent, color: colors.accent, background: colors.accent + '11' },
     rowBtns: { display: 'flex', gap: 10, marginTop: 4 },
     cancelBtn: {
-      flex: 1, background: 'transparent', border: '1px solid #1e1e32',
-      borderRadius: 10, padding: '12px', color: '#4a4870',
-      cursor: 'pointer', fontSize: 14, fontFamily: 'DM Sans, sans-serif',
+      flex: 1, background: 'transparent', border: `1px solid ${colors.border}`,
+      borderRadius: 10, padding: '12px', color: colors.textDim,
+      cursor: 'pointer', fontSize: 14, fontFamily: 'Nunito, sans-serif',
     },
     saveBtn: {
-      flex: 1, background: 'linear-gradient(135deg, #6c63ff, #9b59b6)',
+      flex: 1, background: colors.accentGradient,
       border: 'none', borderRadius: 10, padding: '12px',
       color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
   }
 
-  if (loading) return <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: '#4a4870' }}>Loading...</div></div>
+  if (loading) return <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: colors.textDim }}>Loading...</div></div>
 
   return (
     <div style={s.page}>
@@ -291,25 +293,25 @@ export default function Usecase() {
         </div>
 
         {items.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#2a2840' }}>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: colors.textDim }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-            <p style={{ fontSize: 16, color: '#3a3858', marginBottom: 4 }}>No checklist items yet</p>
+            <p style={{ fontSize: 16, color: colors.textMuted, marginBottom: 4 }}>No checklist items yet</p>
             <p style={{ fontSize: 13 }}>Add your first item to start tracking</p>
           </div>
         ) : (
           items.map(item => (
             <div key={item.id} style={s.itemCard}
-              onMouseEnter={e => e.currentTarget.style.borderColor = '#2a2a40'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1a2e'}
+              onMouseEnter={e => e.currentTarget.style.borderColor = colors.borderLight}
+              onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ ...s.itemLabel, color: todayEntries[item.id] ? '#a89fff' : '#e8e4f0' }}>
+                <div style={{ ...s.itemLabel, color: todayEntries[item.id] ? colors.accent : colors.text }}>
                   {item.label}
                 </div>
                 {item.description && <div style={s.itemDesc}>{item.description}</div>}
-                <div style={{ fontSize: 11, color: '#2a2840', marginTop: 2, display: 'flex', gap: 8 }}>
+                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2, display: 'flex', gap: 8 }}>
                   <span>{VALUE_TYPES.find(v => v.key === item.value_type)?.label}</span>
-                  <span style={{ color: '#6c63ff' }}>• {
+                  <span style={{ color: colors.accent }}>• {
                     (item.frequency || 'daily').startsWith('custom:')
                       ? (item.frequency.split(':')[1] || '').toUpperCase().split(',').join(', ')
                       : FREQUENCIES.find(f => f.key === (item.frequency || 'daily'))?.label || 'Daily'
@@ -318,7 +320,7 @@ export default function Usecase() {
               </div>
 
               <div style={s.itemControl}>
-                {saving[item.id] && <span style={{ fontSize: 11, color: '#6c63ff' }}>saving...</span>}
+                {saving[item.id] && <span style={{ fontSize: 11, color: colors.accent }}>saving...</span>}
 
                 {item.value_type === 'checkbox' && (
                   <input
@@ -351,8 +353,8 @@ export default function Usecase() {
                     placeholder={item.value_type === 'number' ? '0' : 'Enter value...'}
                     value={todayEntries[item.id]?.value || ''}
                     onChange={e => saveEntry(item.id, e.target.value)}
-                    onFocus={e => e.target.style.borderColor = '#6c63ff'}
-                    onBlur={e => e.target.style.borderColor = '#1e1e32'}
+                    onFocus={e => e.target.style.borderColor = colors.accent}
+                    onBlur={e => e.target.style.borderColor = colors.border}
                   />
                 )}
 
@@ -360,7 +362,7 @@ export default function Usecase() {
                   style={s.deleteBtn}
                   onClick={() => deleteItem(item.id)}
                   onMouseEnter={e => { e.target.style.background = '#3a2020'; e.target.style.borderColor = '#5a3030'; e.target.style.color = '#ff6b6b' }}
-                  onMouseLeave={e => { e.target.style.background = '#1a1a2e'; e.target.style.borderColor = '#2a2a40'; e.target.style.color = '#8a8090' }}
+                  onMouseLeave={e => { e.target.style.background = colors.border; e.target.style.borderColor = colors.borderLight; e.target.style.color = colors.textMuted }}
                   title="Delete item"
                 >✕</button>
               </div>
@@ -371,15 +373,15 @@ export default function Usecase() {
         <button
           style={s.addItemBtn}
           onClick={() => setShowAddItem(true)}
-          onMouseEnter={e => { e.target.style.borderColor = '#6c63ff'; e.target.style.color = '#6c63ff' }}
-          onMouseLeave={e => { e.target.style.borderColor = '#2a2840'; e.target.style.color = '#3a3858' }}
+          onMouseEnter={e => { e.target.style.borderColor = colors.accent; e.target.style.color = colors.accent }}
+          onMouseLeave={e => { e.target.style.borderColor = colors.textDim; e.target.style.color = colors.textMuted }}
         >
           + Add Checklist Item
         </button>
 
         <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
           <button
-            style={{ background: '#6c63ff22', border: '1px solid #6c63ff44', borderRadius: 12, padding: '12px 24px', color: '#6c63ff', cursor: 'pointer', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }}
+            style={{ background: colors.accent + '22', border: `1px solid ${colors.accent}44`, borderRadius: 12, padding: '12px 24px', color: colors.accent, cursor: 'pointer', fontSize: 14, fontFamily: 'Nunito, sans-serif' }}
             onClick={() => navigate(`/usecase/${id}/stats`)}
           >
             📊 Check Your Progress

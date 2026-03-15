@@ -105,7 +105,7 @@ export default function Landing() {
       marginBottom: isMobile ? 28 : 0,
     },
     logo: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: isMobile ? 24 : 28,
       fontWeight: 800,
       letterSpacing: '-1px',
@@ -190,7 +190,7 @@ export default function Landing() {
       transition: 'transform 0.15s, border-color 0.15s',
     },
     headline: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: isMobile ? 42 : 64,
       fontWeight: 800,
       lineHeight: 1.0,
@@ -204,7 +204,7 @@ export default function Landing() {
       lineHeight: 1.6,
       maxWidth: 440,
       marginBottom: isMobile ? 28 : 40,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     orbitGrid: {
       display: 'flex',
@@ -221,7 +221,7 @@ export default function Landing() {
       display: 'flex',
       alignItems: 'center',
       gap: 8,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontWeight: 500,
     },
     howSection: {
@@ -235,7 +235,7 @@ export default function Landing() {
       letterSpacing: '1px',
       textTransform: 'uppercase',
       marginBottom: 16,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontWeight: 600,
     },
     howGrid: {
@@ -265,13 +265,13 @@ export default function Landing() {
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     howCardContent: {
       flex: 1,
     },
     howCardTitle: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: 15,
       fontWeight: 700,
       color: colors.text,
@@ -280,11 +280,11 @@ export default function Landing() {
     howCardDesc: {
       fontSize: 13,
       color: colors.textMuted,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     form: { width: '100%', maxWidth: 360 },
     formTitle: {
-      fontFamily: 'Syne, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       fontSize: isMobile ? 28 : 32,
       fontWeight: 800,
       color: colors.text,
@@ -295,7 +295,7 @@ export default function Landing() {
       fontSize: 15,
       color: colors.textMuted,
       marginBottom: 32,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     input: {
       width: '100%',
@@ -307,7 +307,7 @@ export default function Landing() {
       color: colors.text,
       outline: 'none',
       marginBottom: 12,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
       transition: 'border-color 0.2s',
     },
     btn: {
@@ -322,14 +322,14 @@ export default function Landing() {
       cursor: loading ? 'not-allowed' : 'pointer',
       opacity: loading ? 0.7 : 1,
       marginTop: 8,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     toggle: {
       textAlign: 'center',
       marginTop: 24,
       fontSize: 15,
       color: colors.textMuted,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
     toggleLink: {
       color: colors.accent,
@@ -343,7 +343,7 @@ export default function Landing() {
       fontSize: 13,
       color: colors.textDim,
       marginTop: isMobile ? 28 : 0,
-      fontFamily: 'DM Sans, sans-serif',
+      fontFamily: 'Nunito, sans-serif',
     },
   }
 

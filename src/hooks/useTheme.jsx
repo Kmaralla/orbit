@@ -9,6 +9,7 @@ export const bgColors = [
   { key: 'blue', label: 'Blue', dark: '#080f18', light: '#f0f5fa' },
   { key: 'pink', label: 'Pink', dark: '#180810', light: '#faf0f5' },
   { key: 'green', label: 'Green', dark: '#081810', light: '#f0faf5' },
+  { key: 'orange', label: 'Orange', dark: '#181008', light: '#faf5f0' },
 ]
 
 export const getThemeColors = (mode, bgKey = 'default') => {
