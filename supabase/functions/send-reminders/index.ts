@@ -1,7 +1,10 @@
 // Supabase Edge Function: Daily Check-in Digest
 // Sends ONE gentle email per user with all their orbits
 // Deploy: supabase functions deploy send-reminders
-// Schedule: Supabase Dashboard → Edge Functions → Schedules → 0 8 * * * (8am UTC daily)
+// Schedule twice daily in Supabase Dashboard → Edge Functions → Schedules:
+//   - 0 6 * * *  (12:00 PM IST / 6:00 AM UTC)
+//   - 0 14 * * * (8:00 PM IST / 2:00 PM UTC)
+// Note: Adds 10 second delay between users to avoid Resend rate limits
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -27,7 +30,14 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const appUrl = Deno.env.get('APP_URL') || 'https://orbit-two-phi.vercel.app'
+    const appUrl = Deno.env.get('APP_URL') || 'https://www.orbityours.com'
+
+    // Determine time of day for greeting (IST = UTC+5:30)
+    const now = new Date()
+    const istHour = (now.getUTCHours() + 5) % 24 + (now.getUTCMinutes() >= 30 ? 1 : 0)
+    const isEvening = istHour >= 17 // 5 PM or later IST
+    const greeting = isEvening ? "Evening check-in time" : "Midday check-in time"
+    const timeLabel = isEvening ? "Evening" : "Midday"
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Missing Supabase environment variables')
@@ -64,7 +74,17 @@ Deno.serve(async (req) => {
 
     const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
 
-    for (const email of emails) {
+    // Helper function to sleep (avoid rate limits)
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    for (let i = 0; i < emails.length; i++) {
+      const email = emails[i]
+
+      // Wait 10 seconds between users (skip for first user)
+      if (i > 0) {
+        console.log(`Waiting 10 seconds before sending to next user...`)
+        await sleep(10000)
+      }
       const orbits = orbitsByEmail[email]
 
       // Build orbit links HTML
@@ -130,7 +150,7 @@ Deno.serve(async (req) => {
           <tr>
             <td style="padding-bottom: 20px;">
               <h1 style="color: #e8e4f0; font-size: 20px; font-weight: 600; margin: 0 0 8px 0;">
-                Hey! Quick check-in time
+                Hey! ${greeting} ✨
               </h1>
               <p style="color: #6b6890; font-size: 14px; margin: 0; line-height: 1.5;">
                 ${orbits.length === 1
@@ -188,8 +208,8 @@ Deno.serve(async (req) => {
             from: 'Orbit <reminders@orbityours.com>',
             to: email,
             subject: orbits.length === 1
-              ? `${orbits[0].icon || '○'} Check in: ${orbits[0].name}`
-              : `○ Daily check-in · ${orbits.length} orbits`,
+              ? `${orbits[0].icon || '○'} ${timeLabel}: ${orbits[0].name}`
+              : `○ ${timeLabel} check-in · ${orbits.length} orbits`,
             html: emailHtml,
           }),
         })
