@@ -456,6 +456,47 @@ export default function Landing() {
         </div>
 
         <div>
+          {/* Typewriter Demo - First */}
+          <div style={{
+            marginBottom: 28,
+            background: colors.bgCard,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 16,
+            padding: isMobile ? 16 : 20,
+            fontFamily: 'monospace',
+            fontSize: isMobile ? 12 : 14,
+            minHeight: isMobile ? 180 : 160,
+          }}>
+            <div style={{ color: colors.accent, marginBottom: 12, fontFamily: 'Nunito, sans-serif', fontWeight: 700, fontSize: isMobile ? 13 : 14 }}>
+              ✨ See how it works
+            </div>
+            {TYPEWRITER_DEMO.slice(0, currentLine).map((line, i) => (
+              <div
+                key={i}
+                style={{
+                  color: line.type === 'title' ? colors.accent : line.type === 'step' ? colors.text : colors.textMuted,
+                  fontWeight: line.type === 'title' ? 700 : 400,
+                  marginBottom: 4,
+                  fontFamily: line.type === 'title' ? 'Nunito, sans-serif' : 'monospace',
+                }}
+              >
+                {line.text}
+              </div>
+            ))}
+            {currentLine < TYPEWRITER_DEMO.length && (
+              <div style={{
+                color: TYPEWRITER_DEMO[currentLine].type === 'title' ? colors.accent
+                  : TYPEWRITER_DEMO[currentLine].type === 'step' ? colors.text
+                  : colors.textMuted,
+                fontWeight: TYPEWRITER_DEMO[currentLine].type === 'title' ? 700 : 400,
+                fontFamily: TYPEWRITER_DEMO[currentLine].type === 'title' ? 'Nunito, sans-serif' : 'monospace',
+              }}>
+                {typewriterText}<span style={{ opacity: 0.7, animation: 'blink 1s infinite' }}>|</span>
+              </div>
+            )}
+          </div>
+          <style>{`@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }`}</style>
+
           <h1 style={s.headline}>
             Track what<br />
             matters<br />
@@ -486,48 +527,7 @@ export default function Landing() {
                 </div>
               ))}
             </div>
-
-            {/* Typewriter Demo */}
-            <div style={{
-              marginTop: 24,
-              background: colors.bgCard,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 16,
-              padding: isMobile ? 16 : 20,
-              fontFamily: 'monospace',
-              fontSize: isMobile ? 12 : 14,
-              minHeight: isMobile ? 180 : 160,
-            }}>
-              <div style={{ color: colors.accent, marginBottom: 12, fontFamily: 'Nunito, sans-serif', fontWeight: 700, fontSize: isMobile ? 13 : 14 }}>
-                Live Example
-              </div>
-              {TYPEWRITER_DEMO.slice(0, currentLine).map((line, i) => (
-                <div
-                  key={i}
-                  style={{
-                    color: line.type === 'title' ? colors.accent : line.type === 'step' ? colors.text : colors.textMuted,
-                    fontWeight: line.type === 'title' ? 700 : 400,
-                    marginBottom: 4,
-                    fontFamily: line.type === 'title' ? 'Nunito, sans-serif' : 'monospace',
-                  }}
-                >
-                  {line.text}
-                </div>
-              ))}
-              {currentLine < TYPEWRITER_DEMO.length && (
-                <div style={{
-                  color: TYPEWRITER_DEMO[currentLine].type === 'title' ? colors.accent
-                    : TYPEWRITER_DEMO[currentLine].type === 'step' ? colors.text
-                    : colors.textMuted,
-                  fontWeight: TYPEWRITER_DEMO[currentLine].type === 'title' ? 700 : 400,
-                  fontFamily: TYPEWRITER_DEMO[currentLine].type === 'title' ? 'Nunito, sans-serif' : 'monospace',
-                }}>
-                  {typewriterText}<span style={{ opacity: 0.7, animation: 'blink 1s infinite' }}>|</span>
-                </div>
-              )}
-            </div>
           </div>
-          <style>{`@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }`}</style>
         </div>
 
         <div style={s.footer}>
@@ -588,6 +588,35 @@ export default function Landing() {
               {mode === 'login' ? 'Sign up' : 'Sign in'}
             </span>
           </p>
+
+          <div style={{
+            marginTop: 24,
+            paddingTop: 24,
+            borderTop: `1px solid ${colors.border}`,
+            textAlign: 'center'
+          }}>
+            <button
+              style={{
+                background: 'transparent',
+                border: `1px solid ${colors.border}`,
+                borderRadius: 12,
+                padding: '12px 24px',
+                fontSize: 14,
+                color: colors.textMuted,
+                cursor: 'pointer',
+                fontFamily: 'Nunito, sans-serif',
+                transition: 'all 0.2s',
+              }}
+              onClick={() => navigate('/demo')}
+              onMouseEnter={e => { e.target.style.borderColor = colors.accent; e.target.style.color = colors.accent }}
+              onMouseLeave={e => { e.target.style.borderColor = colors.border; e.target.style.color = colors.textMuted }}
+            >
+              👀 Try as Guest
+            </button>
+            <p style={{ fontSize: 12, color: colors.textDim, marginTop: 8 }}>
+              Explore with sample data, no signup needed
+            </p>
+          </div>
         </div>
       </div>
     </div>
