@@ -16,6 +16,18 @@ const HOW_IT_WORKS = [
   { step: '3', icon: '📊', title: 'See Patterns', desc: 'AI finds trends & actions' },
 ]
 
+// Typewriter demo sequence
+const TYPEWRITER_DEMO = [
+  { type: 'title', text: 'Example: Tracking Dad\'s Health' },
+  { type: 'step', text: '→ Create orbit: "Dad\'s Health" 👴' },
+  { type: 'item', text: '  ☑️ Did dad take morning meds?' },
+  { type: 'item', text: '  ⭐ Energy level today (1-10)' },
+  { type: 'item', text: '  🔢 Blood pressure reading' },
+  { type: 'item', text: '  📝 Any symptoms or notes' },
+  { type: 'step', text: '→ Check in daily in 30 seconds' },
+  { type: 'step', text: '→ AI spots patterns & trends ✨' },
+]
+
 export default function Landing() {
   const { user } = useAuth()
   const { colors, theme, toggleTheme, bgColor, setBgColor } = useTheme()
@@ -29,6 +41,9 @@ export default function Landing() {
   const [error, setError] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [showColors, setShowColors] = useState(false)
+  const [typewriterIndex, setTypewriterIndex] = useState(0)
+  const [typewriterText, setTypewriterText] = useState('')
+  const [currentLine, setCurrentLine] = useState(0)
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
@@ -36,6 +51,36 @@ export default function Landing() {
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  // Typewriter effect
+  useEffect(() => {
+    if (currentLine >= TYPEWRITER_DEMO.length) {
+      // Reset after showing all lines
+      const resetTimer = setTimeout(() => {
+        setCurrentLine(0)
+        setTypewriterIndex(0)
+        setTypewriterText('')
+      }, 3000)
+      return () => clearTimeout(resetTimer)
+    }
+
+    const line = TYPEWRITER_DEMO[currentLine].text
+    if (typewriterIndex < line.length) {
+      const timer = setTimeout(() => {
+        setTypewriterText(prev => prev + line[typewriterIndex])
+        setTypewriterIndex(prev => prev + 1)
+      }, 40)
+      return () => clearTimeout(timer)
+    } else {
+      // Move to next line
+      const timer = setTimeout(() => {
+        setCurrentLine(prev => prev + 1)
+        setTypewriterIndex(0)
+        setTypewriterText('')
+      }, 800)
+      return () => clearTimeout(timer)
+    }
+  }, [typewriterIndex, currentLine])
 
   if (user) { navigate('/dashboard'); return null }
 
@@ -441,7 +486,48 @@ export default function Landing() {
                 </div>
               ))}
             </div>
+
+            {/* Typewriter Demo */}
+            <div style={{
+              marginTop: 24,
+              background: colors.bgCard,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 16,
+              padding: isMobile ? 16 : 20,
+              fontFamily: 'monospace',
+              fontSize: isMobile ? 12 : 14,
+              minHeight: isMobile ? 180 : 160,
+            }}>
+              <div style={{ color: colors.accent, marginBottom: 12, fontFamily: 'Nunito, sans-serif', fontWeight: 700, fontSize: isMobile ? 13 : 14 }}>
+                Live Example
+              </div>
+              {TYPEWRITER_DEMO.slice(0, currentLine).map((line, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: line.type === 'title' ? colors.accent : line.type === 'step' ? colors.text : colors.textMuted,
+                    fontWeight: line.type === 'title' ? 700 : 400,
+                    marginBottom: 4,
+                    fontFamily: line.type === 'title' ? 'Nunito, sans-serif' : 'monospace',
+                  }}
+                >
+                  {line.text}
+                </div>
+              ))}
+              {currentLine < TYPEWRITER_DEMO.length && (
+                <div style={{
+                  color: TYPEWRITER_DEMO[currentLine].type === 'title' ? colors.accent
+                    : TYPEWRITER_DEMO[currentLine].type === 'step' ? colors.text
+                    : colors.textMuted,
+                  fontWeight: TYPEWRITER_DEMO[currentLine].type === 'title' ? 700 : 400,
+                  fontFamily: TYPEWRITER_DEMO[currentLine].type === 'title' ? 'Nunito, sans-serif' : 'monospace',
+                }}>
+                  {typewriterText}<span style={{ opacity: 0.7, animation: 'blink 1s infinite' }}>|</span>
+                </div>
+              )}
+            </div>
           </div>
+          <style>{`@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }`}</style>
         </div>
 
         <div style={s.footer}>

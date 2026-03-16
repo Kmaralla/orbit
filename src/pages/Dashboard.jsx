@@ -236,11 +236,56 @@ export default function Dashboard() {
       fontSize: 12,
       color: colors.textDim,
     },
+    checkinNudge: {
+      background: `linear-gradient(135deg, ${colors.accent}22 0%, ${colors.accent}11 100%)`,
+      border: `1px solid ${colors.accent}44`,
+      borderRadius: 16,
+      padding: '20px 24px',
+      marginBottom: 24,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16,
+      animation: 'fadeIn 0.5s ease',
+    },
+    nudgeIcon: {
+      fontSize: 32,
+      flexShrink: 0,
+    },
+    nudgeContent: {
+      flex: 1,
+    },
+    nudgeTitle: {
+      fontFamily: 'Nunito, sans-serif',
+      fontSize: 16,
+      fontWeight: 700,
+      color: colors.text,
+      marginBottom: 4,
+    },
+    nudgeText: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+    nudgeBtn: {
+      background: colors.accent,
+      border: 'none',
+      borderRadius: 10,
+      padding: '10px 20px',
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      fontFamily: 'Nunito, sans-serif',
+      whiteSpace: 'nowrap',
+    },
   }
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || 'there'
+
+  // Find orbits not checked in today
+  const uncheckedOrbits = usecases.filter(uc => !todayStats[uc.id])
+  const hasUnchecked = uncheckedOrbits.length > 0 && usecases.length > 0
 
   return (
     <div style={s.page}>
@@ -259,6 +304,31 @@ export default function Dashboard() {
             <span>+</span> New Orbit
           </button>
         </div>
+
+        {/* Check-in Nudge Banner */}
+        {!loading && hasUnchecked && (
+          <div style={s.checkinNudge}>
+            <span style={s.nudgeIcon}>✨</span>
+            <div style={s.nudgeContent}>
+              <div style={s.nudgeTitle}>
+                {uncheckedOrbits.length === 1
+                  ? `Time to check in on ${uncheckedOrbits[0].name}!`
+                  : `${uncheckedOrbits.length} orbits waiting for today's check-in`}
+              </div>
+              <div style={s.nudgeText}>
+                {uncheckedOrbits.length === 1
+                  ? 'Quick 30-second check-in to keep your streak going'
+                  : `${uncheckedOrbits.map(o => o.icon).join(' ')} — takes less than a minute`}
+              </div>
+            </div>
+            <button
+              style={s.nudgeBtn}
+              onClick={() => navigate(`/usecase/${uncheckedOrbits[0].id}`)}
+            >
+              Check In Now →
+            </button>
+          </div>
+        )}
 
         {/* Daily Reminder Toggle */}
         {usecases.length > 0 && !loading && (
@@ -371,7 +441,10 @@ export default function Dashboard() {
         />
       )}
 
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
+      <style>{`
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
     </div>
   )
 }
