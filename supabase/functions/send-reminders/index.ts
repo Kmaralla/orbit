@@ -22,8 +22,14 @@ interface Usecase {
 }
 
 Deno.serve(async (req) => {
+  // Allow CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  // Allow GET for easy testing (cron jobs use POST)
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
   }
 
   try {
