@@ -141,8 +141,11 @@ export function usePushNotifications(userId) {
   }
 
   const subscribe = async () => {
+    const ua = navigator.userAgent
+    const isIOS = /iPhone|iPad/.test(ua)
+    const isAndroid = /Android/.test(ua)
+
     if (!isSupported) {
-      const isIOS = /iPhone|iPad/.test(navigator.userAgent)
       if (isIOS) {
         // Check if running as PWA (standalone mode)
         const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches
@@ -152,6 +155,9 @@ export function usePushNotifications(userId) {
           setError('Add Orbit to Home Screen first, then open from there')
           alert('To enable push notifications on iPhone:\n\n1. Tap the Share button (box with arrow)\n2. Tap "Add to Home Screen"\n3. Open Orbit from your Home Screen\n4. Then enable push notifications\n\nNote: Requires iOS 16.4 or newer')
         }
+      } else if (isAndroid) {
+        setError('Use Chrome browser for push notifications')
+        alert('Push notifications work best on Chrome for Android.\n\nIf you\'re using Chrome, check that notifications are enabled in your browser settings.')
       } else {
         setError('Push notifications not supported on this browser')
       }
@@ -224,14 +230,23 @@ export function usePushNotifications(userId) {
       return true
     } catch (err) {
       console.error('Error subscribing:', err)
-      // Show more specific error
+      // Show more specific error based on device
+      const ua = navigator.userAgent
+      const isAndroid = /Android/.test(ua)
       let errorMsg = err.message
-      if (err.message?.includes('denied')) {
-        errorMsg = 'Permission denied. Check browser settings.'
-      } else if (err.message?.includes('subscription')) {
+
+      if (err.message?.includes('denied') || err.name === 'NotAllowedError') {
+        if (isAndroid) {
+          errorMsg = 'Permission denied. Go to Chrome Settings → Site Settings → Notifications'
+        } else {
+          errorMsg = 'Permission denied. Check browser notification settings.'
+        }
+      } else if (err.message?.includes('subscription') || err.name === 'AbortError') {
         errorMsg = 'Subscription failed. Try again.'
-      } else if (err.code === 'PGRST') {
+      } else if (err.code === 'PGRST' || err.message?.includes('42P01')) {
         errorMsg = 'Database error. Table may not exist.'
+      } else if (err.message?.includes('push service')) {
+        errorMsg = 'Push service error. Check internet connection.'
       }
       setError(errorMsg)
       setLoading(false)
