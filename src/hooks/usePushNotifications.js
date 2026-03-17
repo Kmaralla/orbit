@@ -144,8 +144,14 @@ export function usePushNotifications(userId) {
     if (!isSupported) {
       const isIOS = /iPhone|iPad/.test(navigator.userAgent)
       if (isIOS) {
-        setError('On iPhone/iPad, add Orbit to your Home Screen first, then enable push')
-        alert('To enable push notifications on iPhone/iPad:\n\n1. Tap the Share button (box with arrow)\n2. Tap "Add to Home Screen"\n3. Open Orbit from your Home Screen\n4. Then enable push notifications')
+        // Check if running as PWA (standalone mode)
+        const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches
+        if (isStandalone) {
+          setError('Push not available. Requires iOS 16.4+ with notifications enabled in Settings.')
+        } else {
+          setError('Add Orbit to Home Screen first, then open from there')
+          alert('To enable push notifications on iPhone:\n\n1. Tap the Share button (box with arrow)\n2. Tap "Add to Home Screen"\n3. Open Orbit from your Home Screen\n4. Then enable push notifications\n\nNote: Requires iOS 16.4 or newer')
+        }
       } else {
         setError('Push notifications not supported on this browser')
       }
