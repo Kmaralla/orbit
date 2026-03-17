@@ -5,10 +5,14 @@ import { supabase } from '../lib/supabase'
 // Store private key in Supabase secrets as VAPID_PRIVATE_KEY
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 
-// Debug: log if VAPID key is configured
-if (!VAPID_PUBLIC_KEY) {
-  console.warn('Push notifications: VITE_VAPID_PUBLIC_KEY not configured')
-}
+// Debug: log VAPID key status
+console.log('Push notifications config:', {
+  hasVapidKey: !!VAPID_PUBLIC_KEY,
+  vapidKeyLength: VAPID_PUBLIC_KEY?.length,
+  serviceWorker: 'serviceWorker' in navigator,
+  pushManager: 'PushManager' in window,
+  notification: 'Notification' in window
+})
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
@@ -202,7 +206,16 @@ export function usePushNotifications(userId) {
       return true
     } catch (err) {
       console.error('Error subscribing:', err)
-      setError(err.message)
+      // Show more specific error
+      let errorMsg = err.message
+      if (err.message?.includes('denied')) {
+        errorMsg = 'Permission denied. Check browser settings.'
+      } else if (err.message?.includes('subscription')) {
+        errorMsg = 'Subscription failed. Try again.'
+      } else if (err.code === 'PGRST') {
+        errorMsg = 'Database error. Table may not exist.'
+      }
+      setError(errorMsg)
       setLoading(false)
       return false
     }
