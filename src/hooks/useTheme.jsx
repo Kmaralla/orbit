@@ -49,9 +49,9 @@ export const getThemeColors = (mode, bgKey = 'default') => {
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('orbit-theme') || 'dark'
+      return localStorage.getItem('orbit-theme') || 'light'
     }
-    return 'dark'
+    return 'light'
   })
 
   const [bgColor, setBgColor] = useState(() => {
