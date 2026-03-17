@@ -62,6 +62,14 @@ export function usePushNotifications(userId) {
 
   const checkExistingSubscription = async () => {
     try {
+      // Check if service worker is already registered (don't wait forever)
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      if (registrations.length === 0) {
+        // No service worker yet - that's fine, user hasn't subscribed before
+        setLoading(false)
+        return
+      }
+
       const registration = await navigator.serviceWorker.ready
       const existingSub = await registration.pushManager.getSubscription()
 
@@ -79,6 +87,10 @@ export function usePushNotifications(userId) {
     if (!userId) return
 
     try {
+      // Only track if service worker is already registered
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      if (registrations.length === 0) return
+
       const registration = await navigator.serviceWorker.ready
       const existingSub = await registration.pushManager.getSubscription()
 
