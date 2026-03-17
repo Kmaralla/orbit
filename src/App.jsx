@@ -7,6 +7,7 @@ import Usecase from './pages/Usecase'
 import Stats from './pages/Stats'
 import Privacy from './pages/Privacy'
 import Demo from './pages/Demo'
+import QuickCheckin from './pages/QuickCheckin'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/usecase/:id" element={<ProtectedRoute><Usecase /></ProtectedRoute>} />
             <Route path="/usecase/:id/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
+            <Route path="/quick-checkin" element={<ProtectedRoute><QuickCheckin /></ProtectedRoute>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

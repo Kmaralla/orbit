@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { usePushNotifications } from '../hooks/usePushNotifications'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 
@@ -21,6 +22,7 @@ export default function Dashboard() {
   const [togglingReminder, setTogglingReminder] = useState(false)
 
   const userEmail = user?.email || ''
+  const { isSupported: pushSupported, isSubscribed: pushEnabled, subscribe: subscribePush, unsubscribe: unsubscribePush, loading: pushLoading } = usePushNotifications(user?.id)
 
   const copyOrbitLink = async (ucId, e) => {
     e.stopPropagation()
@@ -330,30 +332,61 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Daily Reminder Toggle */}
+        {/* Reminder Toggles */}
         {usecases.length > 0 && !loading && (
-          <div style={s.reminderToggle}>
-            <div>
-              <div style={s.toggleLabel}>Daily email reminder</div>
-              <div style={s.toggleSub}>
-                {remindersEnabled ? `Sending to ${userEmail}` : 'Get a gentle nudge each morning'}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+            {/* Push Notifications Toggle */}
+            {pushSupported && (
+              <div style={{ ...s.reminderToggle, flex: 1, minWidth: 280, marginBottom: 0 }}>
+                <div>
+                  <div style={s.toggleLabel}>🔔 Push notifications</div>
+                  <div style={s.toggleSub}>
+                    {pushEnabled ? 'Daily reminder at 8pm' : 'Get notified on this device'}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    ...s.toggleSwitch,
+                    background: pushEnabled ? colors.accent : colors.border,
+                    opacity: pushLoading ? 0.6 : 1,
+                  }}
+                  onClick={!pushLoading ? (pushEnabled ? unsubscribePush : subscribePush) : undefined}
+                >
+                  <div
+                    style={{
+                      ...s.toggleKnob,
+                      left: pushEnabled ? 23 : 3,
+                      background: pushEnabled ? '#fff' : colors.textDim,
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-            <div
-              style={{
-                ...s.toggleSwitch,
-                background: remindersEnabled ? colors.accent : colors.border,
-                opacity: togglingReminder ? 0.6 : 1,
-              }}
-              onClick={!togglingReminder ? toggleReminders : undefined}
-            >
+            )}
+
+            {/* Email Reminder Toggle */}
+            <div style={{ ...s.reminderToggle, flex: 1, minWidth: 280, marginBottom: 0 }}>
+              <div>
+                <div style={s.toggleLabel}>📧 Email reminders</div>
+                <div style={s.toggleSub}>
+                  {remindersEnabled ? `Sending to ${userEmail}` : 'Get emails at 12pm & 8pm'}
+                </div>
+              </div>
               <div
                 style={{
-                  ...s.toggleKnob,
-                  left: remindersEnabled ? 23 : 3,
-                  background: remindersEnabled ? '#fff' : colors.textDim,
+                  ...s.toggleSwitch,
+                  background: remindersEnabled ? colors.accent : colors.border,
+                  opacity: togglingReminder ? 0.6 : 1,
                 }}
-              />
+                onClick={!togglingReminder ? toggleReminders : undefined}
+              >
+                <div
+                  style={{
+                    ...s.toggleKnob,
+                    left: remindersEnabled ? 23 : 3,
+                    background: remindersEnabled ? '#fff' : colors.textDim,
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
