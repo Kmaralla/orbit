@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [togglingReminder, setTogglingReminder] = useState(false)
 
   const userEmail = user?.email || ''
-  const { isSupported: pushSupported, isSubscribed: pushEnabled, subscribe: subscribePush, unsubscribe: unsubscribePush, loading: pushLoading } = usePushNotifications(user?.id)
+  const { isSupported: pushSupported, isSubscribed: pushEnabled, subscribe: subscribePush, unsubscribe: unsubscribePush, loading: pushLoading, error: pushError } = usePushNotifications(user?.id)
 
   const copyOrbitLink = async (ucId, e) => {
     e.stopPropagation()
@@ -335,33 +335,36 @@ export default function Dashboard() {
         {/* Reminder Toggles */}
         {usecases.length > 0 && !loading && (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
-            {/* Push Notifications Toggle */}
-            {pushSupported && (
-              <div style={{ ...s.reminderToggle, flex: 1, minWidth: 280, marginBottom: 0 }}>
-                <div>
-                  <div style={s.toggleLabel}>🔔 Push notifications</div>
-                  <div style={s.toggleSub}>
-                    {pushEnabled ? 'Daily reminder at 8pm' : 'Get notified on this device'}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    ...s.toggleSwitch,
-                    background: pushEnabled ? colors.accent : colors.border,
-                    opacity: pushLoading ? 0.6 : 1,
-                  }}
-                  onClick={!pushLoading ? (pushEnabled ? unsubscribePush : subscribePush) : undefined}
-                >
-                  <div
-                    style={{
-                      ...s.toggleKnob,
-                      left: pushEnabled ? 23 : 3,
-                      background: pushEnabled ? '#fff' : colors.textDim,
-                    }}
-                  />
+            {/* Push Notifications Toggle - always show, with helpful errors */}
+            <div style={{ ...s.reminderToggle, flex: 1, minWidth: 280, marginBottom: 0 }}>
+              <div>
+                <div style={s.toggleLabel}>🔔 Push notifications</div>
+                <div style={{ ...s.toggleSub, color: pushError ? '#ff6b6b' : colors.textDim }}>
+                  {pushError
+                    ? pushError
+                    : pushEnabled
+                      ? 'Daily reminder at 8pm'
+                      : 'Get notified on this device'}
                 </div>
               </div>
-            )}
+              <div
+                style={{
+                  ...s.toggleSwitch,
+                  background: pushEnabled ? colors.accent : colors.border,
+                  opacity: pushLoading ? 0.6 : 1,
+                  cursor: pushLoading ? 'wait' : 'pointer',
+                }}
+                onClick={!pushLoading ? (pushEnabled ? unsubscribePush : subscribePush) : undefined}
+              >
+                <div
+                  style={{
+                    ...s.toggleKnob,
+                    left: pushEnabled ? 23 : 3,
+                    background: pushEnabled ? '#fff' : colors.textDim,
+                  }}
+                />
+              </div>
+            </div>
 
             {/* Email Reminder Toggle */}
             <div style={{ ...s.reminderToggle, flex: 1, minWidth: 280, marginBottom: 0 }}>

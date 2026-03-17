@@ -5,6 +5,11 @@ import { supabase } from '../lib/supabase'
 // Store private key in Supabase secrets as VAPID_PRIVATE_KEY
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
 
+// Debug: log if VAPID key is configured
+if (!VAPID_PUBLIC_KEY) {
+  console.warn('Push notifications: VITE_VAPID_PUBLIC_KEY not configured')
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -120,8 +125,26 @@ export function usePushNotifications(userId) {
   }
 
   const subscribe = async () => {
-    if (!isSupported || !userId || !VAPID_PUBLIC_KEY) {
-      setError('Push notifications not supported or not configured')
+    if (!isSupported) {
+      const isIOS = /iPhone|iPad/.test(navigator.userAgent)
+      if (isIOS) {
+        setError('On iPhone/iPad, add Orbit to your Home Screen first, then enable push')
+        alert('To enable push notifications on iPhone/iPad:\n\n1. Tap the Share button (box with arrow)\n2. Tap "Add to Home Screen"\n3. Open Orbit from your Home Screen\n4. Then enable push notifications')
+      } else {
+        setError('Push notifications not supported on this browser')
+      }
+      return false
+    }
+
+    if (!userId) {
+      setError('Please log in first')
+      return false
+    }
+
+    if (!VAPID_PUBLIC_KEY) {
+      console.error('VITE_VAPID_PUBLIC_KEY is not set!')
+      setError('Push notifications not configured. Contact support.')
+      alert('Push notifications are not configured yet. The VAPID key needs to be added to the environment.')
       return false
     }
 
