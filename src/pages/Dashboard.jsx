@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
+import EditOrbit from '../components/EditOrbit'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
 
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const [usecases, setUsecases] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [editingOrbit, setEditingOrbit] = useState(null)
   const [todayStats, setTodayStats] = useState({})
   const [copiedId, setCopiedId] = useState(null)
   const [remindersEnabled, setRemindersEnabled] = useState(false)
@@ -438,6 +440,15 @@ export default function Dashboard() {
                   </span>
                   <div style={s.actions}>
                     <button
+                      style={s.actionBtn}
+                      onClick={(e) => { e.stopPropagation(); setEditingOrbit(uc) }}
+                      onMouseEnter={e => { e.target.style.background = colors.borderLight; e.target.style.color = colors.text; e.target.style.borderColor = colors.accent }}
+                      onMouseLeave={e => { e.target.style.background = colors.border; e.target.style.color = colors.textMuted; e.target.style.borderColor = colors.borderLight }}
+                      title="Edit orbit"
+                    >
+                      ⚙️
+                    </button>
+                    <button
                       style={{ ...s.copyBtn, ...(copiedId === uc.id ? { background: '#1a3a1a', borderColor: '#3d6a3d', color: '#7dba7d' } : {}) }}
                       onClick={(e) => copyOrbitLink(uc.id, e)}
                       onMouseEnter={e => { if (copiedId !== uc.id) { e.target.style.background = colors.borderLight; e.target.style.borderColor = colors.accent } }}
@@ -474,6 +485,20 @@ export default function Dashboard() {
           onCreated={(uc) => { setUsecases(prev => [...prev, uc]); setShowAdd(false) }}
           userId={user.id}
           icons={ICONS}
+        />
+      )}
+
+      {editingOrbit && (
+        <EditOrbit
+          orbit={editingOrbit}
+          onClose={() => setEditingOrbit(null)}
+          onUpdated={(updated) => {
+            setUsecases(prev => prev.map(uc => uc.id === updated.id ? updated : uc))
+            setEditingOrbit(null)
+          }}
+          onDeleted={(deletedId) => {
+            setUsecases(prev => prev.filter(uc => uc.id !== deletedId))
+          }}
         />
       )}
 
