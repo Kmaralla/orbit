@@ -1,10 +1,7 @@
-// Supabase Edge Function: Daily Check-in Digest
-// Sends ONE gentle email per user with all their orbits
+// Supabase Edge Function: Send Email Reminders at User's Configured Time
 // Deploy: supabase functions deploy send-reminders
-// Schedule twice daily in Supabase Dashboard → Edge Functions → Schedules:
-//   - 0 6 * * *  (12:00 PM IST / 6:00 AM UTC)
-//   - 0 14 * * * (8:00 PM IST / 2:00 PM UTC)
-// Note: Adds 10 second delay between users to avoid Resend rate limits
+// Schedule: Run every hour (0 * * * *) to check for users whose reminder time matches
+// Test: Invoke with { "test": true } to send to all users regardless of time
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -18,18 +15,28 @@ interface Usecase {
   name: string
   icon: string
   notify_email: string
+  notify_time: string
   user_id: string
 }
 
+// Get current hour in a specific timezone
+function getHourInTimezone(timezone: string): number {
+  try {
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: 'numeric',
+      hour12: false
+    })
+    return parseInt(formatter.format(now), 10)
+  } catch {
+    return -1
+  }
+}
+
 Deno.serve(async (req) => {
-  // Allow CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
-  }
-
-  // Allow GET for easy testing (cron jobs use POST)
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
   }
 
   try {
@@ -37,13 +44,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     const appUrl = Deno.env.get('APP_URL') || 'https://www.orbityours.com'
-
-    // Determine time of day for greeting (IST = UTC+5:30)
-    const now = new Date()
-    const istHour = (now.getUTCHours() + 5) % 24 + (now.getUTCMinutes() >= 30 ? 1 : 0)
-    const isEvening = istHour >= 17 // 5 PM or later IST
-    const greeting = isEvening ? "Evening check-in time" : "Midday check-in time"
-    const timeLabel = isEvening ? "Evening" : "Midday"
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Missing Supabase environment variables')
@@ -55,10 +55,24 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get all orbits that have email reminders enabled
-    const { data: usecases, error: fetchError } = await supabase
+    // Check for test mode
+    let forceAll = false
+    try {
+      const body = await req.json()
+      if (body?.test === true) forceAll = true
+    } catch {
+      // No body, that's fine
+    }
+
+    // Get current hour in IST (default timezone for now)
+    // TODO: Add user timezone support like push notifications
+    const currentHourIST = getHourInTimezone('Asia/Kolkata')
+    console.log(`Current hour in IST: ${currentHourIST}`)
+
+    // Get all orbits with email reminders enabled
+    const { data: allUsecases, error: fetchError } = await supabase
       .from('usecases')
-      .select('id, name, icon, notify_email, user_id')
+      .select('id, name, icon, notify_email, notify_time, user_id')
       .not('notify_email', 'is', null)
 
     if (fetchError) {
@@ -66,9 +80,31 @@ Deno.serve(async (req) => {
       throw fetchError
     }
 
-    // Group orbits by email (one email per user)
+    // Filter to only orbits whose notify_time matches current hour (unless test mode)
+    const usecases = forceAll
+      ? allUsecases
+      : (allUsecases as Usecase[])?.filter(uc => {
+          if (!uc.notify_time) return false
+          const reminderHour = parseInt(uc.notify_time.split(':')[0], 10)
+          console.log(`Orbit "${uc.name}": reminder at ${uc.notify_time} (hour ${reminderHour}), current hour: ${currentHourIST}`)
+          return reminderHour === currentHourIST
+        })
+
+    if (!usecases || usecases.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: forceAll ? 'No users with reminders configured' : `No reminders scheduled for hour ${currentHourIST}`,
+          totalOrbitsWithReminders: allUsecases?.length || 0,
+          sent: 0
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Group orbits by email
     const orbitsByEmail: Record<string, Usecase[]> = {}
-    for (const uc of (usecases as Usecase[]) ?? []) {
+    for (const uc of usecases as Usecase[]) {
       if (!orbitsByEmail[uc.notify_email]) {
         orbitsByEmail[uc.notify_email] = []
       }
@@ -76,24 +112,26 @@ Deno.serve(async (req) => {
     }
 
     const emails = Object.keys(orbitsByEmail)
-    console.log(`Sending daily digest to ${emails.length} users`)
+    console.log(`Sending reminders to ${emails.length} users for ${usecases.length} orbits`)
 
     const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
-
-    // Helper function to sleep (avoid rate limits)
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    // Determine greeting based on time
+    const isEvening = currentHourIST >= 17
+    const isMorning = currentHourIST < 12
+    const greeting = isEvening ? "Evening check-in time" : isMorning ? "Morning check-in time" : "Time for your check-in"
 
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i]
 
-      // Wait 10 seconds between users (skip for first user)
       if (i > 0) {
-        console.log(`Waiting 10 seconds before sending to next user...`)
+        console.log(`Waiting 10 seconds before next user...`)
         await sleep(10000)
       }
+
       const orbits = orbitsByEmail[email]
 
-      // Build orbit links HTML
       const orbitLinksHtml = orbits.map(uc => `
         <tr>
           <td style="padding: 12px 0; border-bottom: 1px solid #1a1a2e;">
@@ -133,8 +171,6 @@ Deno.serve(async (req) => {
     <tr>
       <td align="center">
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px;">
-
-          <!-- Header -->
           <tr>
             <td style="padding-bottom: 24px;">
               <table width="100%" cellpadding="0" cellspacing="0">
@@ -151,8 +187,6 @@ Deno.serve(async (req) => {
               </table>
             </td>
           </tr>
-
-          <!-- Greeting -->
           <tr>
             <td style="padding-bottom: 20px;">
               <h1 style="color: #e8e4f0; font-size: 20px; font-weight: 600; margin: 0 0 8px 0;">
@@ -165,8 +199,6 @@ Deno.serve(async (req) => {
               </p>
             </td>
           </tr>
-
-          <!-- Orbit Cards -->
           <tr>
             <td style="background-color: #0d0d1a; border-radius: 16px; border: 1px solid #1a1a2e; padding: 8px 20px;">
               <table width="100%" cellpadding="0" cellspacing="0">
@@ -174,8 +206,6 @@ Deno.serve(async (req) => {
               </table>
             </td>
           </tr>
-
-          <!-- Dashboard Link -->
           <tr>
             <td style="padding-top: 20px; text-align: center;">
               <a href="${appUrl}/dashboard"
@@ -184,8 +214,6 @@ Deno.serve(async (req) => {
               </a>
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
             <td style="padding-top: 32px; text-align: center;">
               <p style="color: #3a3858; font-size: 11px; margin: 0;">
@@ -194,7 +222,6 @@ Deno.serve(async (req) => {
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -214,8 +241,8 @@ Deno.serve(async (req) => {
             from: 'Orbit <reminders@orbityours.com>',
             to: email,
             subject: orbits.length === 1
-              ? `${orbits[0].icon || '○'} ${timeLabel}: ${orbits[0].name}`
-              : `○ ${timeLabel} check-in · ${orbits.length} orbits`,
+              ? `${orbits[0].icon || '○'} Reminder: ${orbits[0].name}`
+              : `○ Check-in reminder · ${orbits.length} orbits`,
             html: emailHtml,
           }),
         })
@@ -226,7 +253,7 @@ Deno.serve(async (req) => {
           console.error(`Failed to send to ${email}:`, responseData)
           results.push({ email, status: 'failed', orbitCount: orbits.length, error: responseData.message })
         } else {
-          console.log(`Sent digest to ${email} (${orbits.length} orbits)`)
+          console.log(`✓ Sent to ${email} (${orbits.length} orbits)`)
           results.push({ email, status: 'sent', orbitCount: orbits.length })
         }
       } catch (emailError) {
@@ -235,13 +262,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    const sent = results.filter(r => r.status === 'sent').length
+    const failed = results.filter(r => r.status !== 'sent').length
+
     return new Response(
       JSON.stringify({
         success: true,
-        usersNotified: emails.length,
+        currentHour: currentHourIST,
+        testMode: forceAll,
+        totalOrbitsWithReminders: allUsecases?.length || 0,
+        orbitsMatchingTime: usecases.length,
+        usersNotified: sent,
+        failed,
         results,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
     console.error('Edge function error:', error)
