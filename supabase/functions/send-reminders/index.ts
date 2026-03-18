@@ -65,9 +65,15 @@ Deno.serve(async (req) => {
     }
 
     // Get current hour in IST (default timezone for now)
-    // TODO: Add user timezone support like push notifications
     const currentHourIST = getHourInTimezone('Asia/Kolkata')
     console.log(`Current hour in IST: ${currentHourIST}`)
+
+    // Log invocation start
+    await supabase.from('function_logs').insert({
+      function_name: 'send-reminders',
+      status: 'started',
+      details: { testMode: forceAll, currentHourIST, timestamp: new Date().toISOString() }
+    })
 
     // Get all orbits with email reminders enabled
     const { data: allUsecases, error: fetchError } = await supabase
@@ -264,6 +270,20 @@ Deno.serve(async (req) => {
 
     const sent = results.filter(r => r.status === 'sent').length
     const failed = results.filter(r => r.status !== 'sent').length
+
+    // Log success
+    await supabase.from('function_logs').insert({
+      function_name: 'send-reminders',
+      status: 'success',
+      details: {
+        testMode: forceAll,
+        currentHourIST,
+        totalOrbitsWithReminders: allUsecases?.length || 0,
+        orbitsMatchingTime: usecases.length,
+        sent,
+        failed
+      }
+    })
 
     return new Response(
       JSON.stringify({

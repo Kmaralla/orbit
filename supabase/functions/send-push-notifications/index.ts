@@ -64,6 +64,13 @@ Deno.serve(async (req) => {
       // No body or invalid JSON, that's fine
     }
 
+    // Log invocation start
+    await supabase.from('function_logs').insert({
+      function_name: 'send-push-notifications',
+      status: 'started',
+      details: { testMode: forceAll, timestamp: new Date().toISOString() }
+    })
+
     // Get all subscriptions
     const { data: allSubscriptions, error: fetchError } = await supabase
       .from('push_subscriptions')
@@ -156,6 +163,19 @@ Deno.serve(async (req) => {
 
     const sent = results.filter(r => r.success).length
     const failed = results.filter(r => !r.success).length
+
+    // Log success
+    await supabase.from('function_logs').insert({
+      function_name: 'send-push-notifications',
+      status: 'success',
+      details: {
+        testMode: forceAll,
+        totalSubscriptions: allSubscriptions.length,
+        atLocalTime8pm: subscriptionsToNotify.length,
+        sent,
+        failed
+      }
+    })
 
     return new Response(
       JSON.stringify({
