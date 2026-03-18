@@ -52,8 +52,17 @@ Deno.serve(async (req) => {
     )
 
     // Check if this is a test/manual invocation (send to all) or scheduled (8pm only)
+    // Can use ?test=true in URL or { "test": true } in body
     const url = new URL(req.url)
-    const forceAll = url.searchParams.get('test') === 'true'
+    let forceAll = url.searchParams.get('test') === 'true'
+
+    // Also check request body for test flag (easier from Supabase dashboard)
+    try {
+      const body = await req.json()
+      if (body?.test === true) forceAll = true
+    } catch {
+      // No body or invalid JSON, that's fine
+    }
 
     // Get all subscriptions
     const { data: allSubscriptions, error: fetchError } = await supabase
