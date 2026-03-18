@@ -233,10 +233,10 @@ export function usePushNotifications(userId) {
       return true
     } catch (err) {
       console.error('Error subscribing:', err)
-      // Show more specific error based on device
+      // Show more specific error based on device and error type
       const ua = navigator.userAgent
       const isAndroid = /Android/.test(ua)
-      let errorMsg = err.message
+      let errorMsg = err.message || 'Unknown error'
 
       if (err.message?.includes('denied') || err.name === 'NotAllowedError') {
         if (isAndroid) {
@@ -244,13 +244,20 @@ export function usePushNotifications(userId) {
         } else {
           errorMsg = 'Permission denied. Check browser notification settings.'
         }
-      } else if (err.message?.includes('subscription') || err.name === 'AbortError') {
-        errorMsg = 'Subscription failed. Try again.'
-      } else if (err.code === 'PGRST' || err.message?.includes('42P01')) {
-        errorMsg = 'Database error. Table may not exist.'
-      } else if (err.message?.includes('push service')) {
-        errorMsg = 'Push service error. Check internet connection.'
+      } else if (err.code === 'PGRST116') {
+        errorMsg = 'Database: Row not found'
+      } else if (err.code === '42P01' || err.message?.includes('does not exist')) {
+        errorMsg = 'Database table not found. Contact support.'
+      } else if (err.code === '42703' || err.message?.includes('column')) {
+        errorMsg = 'Database column missing. Run migration.'
+      } else if (err.code?.startsWith('PGRST') || err.code?.startsWith('42')) {
+        errorMsg = `Database error: ${err.code}`
+      } else if (err.message?.includes('push service') || err.name === 'AbortError') {
+        errorMsg = 'Push service error. Try again.'
       }
+
+      // Log full error for debugging
+      console.error('Full error details:', { code: err.code, message: err.message, name: err.name })
       setError(errorMsg)
       setLoading(false)
       return false
