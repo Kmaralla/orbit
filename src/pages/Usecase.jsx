@@ -40,7 +40,9 @@ export default function Usecase() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})
   const [showAddItem, setShowAddItem] = useState(false)
+  const [editingItem, setEditingItem] = useState(null)
   const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
+  const [draggedItem, setDraggedItem] = useState(null)
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => { fetchAll() }, [id])
@@ -49,7 +51,7 @@ export default function Usecase() {
     const { data: uc } = await supabase.from('usecases').select('*').eq('id', id).single()
     setUsecase(uc)
 
-    const { data: its } = await supabase.from('checklist_items').select('*').eq('usecase_id', id).order('created_at')
+    const { data: its } = await supabase.from('checklist_items').select('*').eq('usecase_id', id).order('sort_order', { ascending: true, nullsFirst: false }).order('created_at')
     setItems(its || [])
 
     const { data: entries } = await supabase
@@ -119,6 +121,48 @@ export default function Usecase() {
     setItems(prev => prev.filter(i => i.id !== itemId))
   }
 
+  const updateItem = async (itemId, updates) => {
+    await supabase.from('checklist_items').update(updates).eq('id', itemId)
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updates } : i))
+    setEditingItem(null)
+  }
+
+  // Drag and drop reordering
+  const handleDragStart = (e, item) => {
+    setDraggedItem(item)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e, targetItem) => {
+    e.preventDefault()
+    if (!draggedItem || draggedItem.id === targetItem.id) return
+  }
+
+  const handleDrop = async (e, targetItem) => {
+    e.preventDefault()
+    if (!draggedItem || draggedItem.id === targetItem.id) return
+
+    const newItems = [...items]
+    const draggedIndex = newItems.findIndex(i => i.id === draggedItem.id)
+    const targetIndex = newItems.findIndex(i => i.id === targetItem.id)
+
+    // Reorder locally
+    newItems.splice(draggedIndex, 1)
+    newItems.splice(targetIndex, 0, draggedItem)
+    setItems(newItems)
+
+    // Update sort_order in database
+    for (let i = 0; i < newItems.length; i++) {
+      await supabase.from('checklist_items').update({ sort_order: i }).eq('id', newItems[i].id)
+    }
+
+    setDraggedItem(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedItem(null)
+  }
+
   const completedCount = items.filter(i => todayEntries[i.id]?.value !== undefined && todayEntries[i.id]?.value !== '').length
   const progress = items.length > 0 ? (completedCount / items.length) * 100 : 0
 
@@ -136,31 +180,63 @@ export default function Usecase() {
       background: colors.bgCard,
       border: `1px solid ${colors.border}`,
       borderRadius: 16,
-      padding: '20px 24px',
+      padding: '16px 20px',
       marginBottom: 12,
+      transition: 'border-color 0.2s, opacity 0.2s',
+    },
+    itemRow: {
       display: 'flex',
-      alignItems: 'center',
-      gap: 20,
-      transition: 'border-color 0.2s',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    dragHandle: {
+      cursor: 'grab',
+      color: colors.textDim,
+      fontSize: 16,
+      padding: '4px',
+      opacity: 0.5,
+      transition: 'opacity 0.2s',
+      userSelect: 'none',
     },
     itemLabel: { fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 600, color: colors.text, marginBottom: 2 },
     itemDesc: { fontSize: 12, color: colors.textDim },
-    itemControl: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 },
+    itemControl: { marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    itemActions: { display: 'flex', gap: 6, marginLeft: 'auto' },
     checkbox: { width: 24, height: 24, accentColor: colors.accent, cursor: 'pointer' },
+    scoreContainer: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 6,
+      maxWidth: '100%',
+    },
     scoreBtn: {
-      width: 36, height: 36, borderRadius: 8,
+      width: 32, height: 32, borderRadius: 8,
       border: `1px solid ${colors.border}`,
       background: 'transparent',
       color: colors.textDim,
       cursor: 'pointer',
-      fontSize: 14,
-      fontFamily: 'monospace',
+      fontSize: 13,
+      fontWeight: 600,
+      fontFamily: 'Nunito, sans-serif',
       transition: 'all 0.15s',
     },
     scoreBtnActive: {
       background: colors.accent,
       borderColor: colors.accent,
       color: '#fff',
+    },
+    editBtn: {
+      background: colors.border,
+      border: 'none',
+      borderRadius: 6,
+      color: colors.textMuted,
+      cursor: 'pointer',
+      fontSize: 12,
+      padding: '6px 10px',
+      transition: 'all 0.15s',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
     },
     textInput: {
       background: colors.bgInput,
@@ -300,22 +376,41 @@ export default function Usecase() {
           </div>
         ) : (
           items.map(item => (
-            <div key={item.id} style={s.itemCard}
+            <div
+              key={item.id}
+              style={{ ...s.itemCard, opacity: draggedItem?.id === item.id ? 0.5 : 1 }}
+              draggable
+              onDragStart={e => handleDragStart(e, item)}
+              onDragOver={e => handleDragOver(e, item)}
+              onDrop={e => handleDrop(e, item)}
+              onDragEnd={handleDragEnd}
               onMouseEnter={e => e.currentTarget.style.borderColor = colors.borderLight}
               onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
             >
-              <div style={{ flex: 1 }}>
-                <div style={{ ...s.itemLabel, color: todayEntries[item.id] ? colors.accent : colors.text }}>
-                  {item.label}
+              <div style={s.itemRow}>
+                {/* Drag handle */}
+                <div
+                  style={s.dragHandle}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                  title="Drag to reorder"
+                >
+                  ⋮⋮
                 </div>
-                {item.description && <div style={s.itemDesc}>{item.description}</div>}
-                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2, display: 'flex', gap: 8 }}>
-                  <span>{VALUE_TYPES.find(v => v.key === item.value_type)?.label}</span>
-                  <span style={{ color: colors.accent }}>• {
-                    (item.frequency || 'daily').startsWith('custom:')
-                      ? (item.frequency.split(':')[1] || '').toUpperCase().split(',').join(', ')
-                      : FREQUENCIES.find(f => f.key === (item.frequency || 'daily'))?.label || 'Daily'
-                  }</span>
+
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...s.itemLabel, color: todayEntries[item.id] ? colors.accent : colors.text }}>
+                    {item.label}
+                  </div>
+                  {item.description && <div style={s.itemDesc}>{item.description}</div>}
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2, display: 'flex', gap: 8 }}>
+                    <span>{VALUE_TYPES.find(v => v.key === item.value_type)?.label}</span>
+                    <span style={{ color: colors.accent }}>• {
+                      (item.frequency || 'daily').startsWith('custom:')
+                        ? (item.frequency.split(':')[1] || '').toUpperCase().split(',').join(', ')
+                        : FREQUENCIES.find(f => f.key === (item.frequency || 'daily'))?.label || 'Daily'
+                    }</span>
+                  </div>
                 </div>
               </div>
 
@@ -332,7 +427,7 @@ export default function Usecase() {
                 )}
 
                 {item.value_type === 'score' && (
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={s.scoreContainer}>
                     {[1,2,3,4,5,6,7,8,9,10].map(n => (
                       <button
                         key={n}
@@ -358,13 +453,24 @@ export default function Usecase() {
                   />
                 )}
 
-                <button
-                  style={s.deleteBtn}
-                  onClick={() => deleteItem(item.id)}
-                  onMouseEnter={e => { e.target.style.background = '#3a2020'; e.target.style.borderColor = '#5a3030'; e.target.style.color = '#ff6b6b' }}
-                  onMouseLeave={e => { e.target.style.background = colors.border; e.target.style.borderColor = colors.borderLight; e.target.style.color = colors.textMuted }}
-                  title="Delete item"
-                >✕</button>
+                <div style={s.itemActions}>
+                  <button
+                    style={s.editBtn}
+                    onClick={() => setEditingItem(item)}
+                    onMouseEnter={e => { e.currentTarget.style.background = colors.borderLight; e.currentTarget.style.color = colors.text }}
+                    onMouseLeave={e => { e.currentTarget.style.background = colors.border; e.currentTarget.style.color = colors.textMuted }}
+                    title="Edit item"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    style={s.deleteBtn}
+                    onClick={() => deleteItem(item.id)}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#3a2020'; e.currentTarget.style.borderColor = '#5a3030'; e.currentTarget.style.color = '#ff6b6b' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = colors.border; e.currentTarget.style.borderColor = colors.borderLight; e.currentTarget.style.color = colors.textMuted }}
+                    title="Delete item"
+                  >✕</button>
+                </div>
               </div>
             </div>
           ))
@@ -450,6 +556,54 @@ export default function Usecase() {
             <div style={s.rowBtns}>
               <button style={s.cancelBtn} onClick={() => setShowAddItem(false)}>Cancel</button>
               <button style={s.saveBtn} onClick={addItem}>Add Item</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <div style={s.modal} onClick={() => setEditingItem(null)}>
+          <div style={s.modalBox} onClick={e => e.stopPropagation()}>
+            <h3 style={s.modalTitle}>Edit Checklist Item</h3>
+            <label style={s.label}>Item label</label>
+            <input
+              style={s.input}
+              value={editingItem.label}
+              onChange={e => setEditingItem(prev => ({ ...prev, label: e.target.value }))}
+              autoFocus
+            />
+            <label style={s.label}>Description (optional)</label>
+            <input
+              style={s.input}
+              placeholder="Any extra notes..."
+              value={editingItem.description || ''}
+              onChange={e => setEditingItem(prev => ({ ...prev, description: e.target.value }))}
+            />
+            <label style={s.label}>Value type</label>
+            <div style={s.typeGrid}>
+              {VALUE_TYPES.map(vt => (
+                <button
+                  key={vt.key}
+                  style={{ ...s.typeBtn, ...(editingItem.value_type === vt.key ? s.typeBtnActive : {}) }}
+                  onClick={() => setEditingItem(prev => ({ ...prev, value_type: vt.key }))}
+                >
+                  {vt.icon} {vt.label}
+                </button>
+              ))}
+            </div>
+            <div style={s.rowBtns}>
+              <button style={s.cancelBtn} onClick={() => setEditingItem(null)}>Cancel</button>
+              <button
+                style={s.saveBtn}
+                onClick={() => updateItem(editingItem.id, {
+                  label: editingItem.label,
+                  description: editingItem.description,
+                  value_type: editingItem.value_type
+                })}
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
