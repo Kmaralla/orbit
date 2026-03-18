@@ -8,12 +8,16 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   p256dh TEXT NOT NULL,
   auth TEXT NOT NULL,
   device_name TEXT,
+  timezone TEXT DEFAULT 'UTC',
   last_used TIMESTAMPTZ DEFAULT NOW(),
   use_count INTEGER DEFAULT 1,
   is_primary BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, endpoint)
 );
+
+-- If table already exists, add timezone column
+ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC';
 
 -- Enable RLS
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;

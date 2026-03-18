@@ -198,8 +198,10 @@ export function usePushNotifications(userId) {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       })
 
-      // Save to Supabase
+      // Save to Supabase with timezone
       const subJson = sub.toJSON()
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone // e.g., "Asia/Kolkata"
+
       const { error: dbError } = await supabase
         .from('push_subscriptions')
         .upsert({
@@ -208,6 +210,7 @@ export function usePushNotifications(userId) {
           p256dh: subJson.keys.p256dh,
           auth: subJson.keys.auth,
           device_name: getDeviceName(),
+          timezone: timezone,
           last_used: new Date().toISOString(),
           use_count: 1,
           is_primary: true // New subscription is primary by default
