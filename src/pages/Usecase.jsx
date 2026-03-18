@@ -44,6 +44,30 @@ export default function Usecase() {
   const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
   const [draggedItem, setDraggedItem] = useState(null)
   const today = new Date().toISOString().split('T')[0]
+  const todayDayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()]
+
+  // Check if an item should be shown today based on its frequency
+  const shouldShowToday = (item) => {
+    const freq = item.frequency || 'daily'
+
+    if (freq === 'daily') return true
+
+    if (freq === 'weekdays') {
+      return ['mon', 'tue', 'wed', 'thu', 'fri'].includes(todayDayOfWeek)
+    }
+
+    if (freq === 'weekly') {
+      // Weekly = show on the day it was created, or default to Monday
+      return todayDayOfWeek === 'mon'
+    }
+
+    if (freq.startsWith('custom:')) {
+      const days = freq.split(':')[1]?.split(',') || []
+      return days.includes(todayDayOfWeek)
+    }
+
+    return true
+  }
 
   useEffect(() => { fetchAll() }, [id])
 
@@ -163,8 +187,12 @@ export default function Usecase() {
     setDraggedItem(null)
   }
 
-  const completedCount = items.filter(i => todayEntries[i.id]?.value !== undefined && todayEntries[i.id]?.value !== '').length
-  const progress = items.length > 0 ? (completedCount / items.length) * 100 : 0
+  // Filter items for today based on frequency
+  const todayItems = items.filter(shouldShowToday)
+  const notTodayItems = items.filter(i => !shouldShowToday(i))
+
+  const completedCount = todayItems.filter(i => todayEntries[i.id]?.value !== undefined && todayEntries[i.id]?.value !== '').length
+  const progress = todayItems.length > 0 ? (completedCount / todayItems.length) * 100 : 0
 
   const s = {
     page: { minHeight: '100vh', background: colors.bg },
@@ -358,12 +386,17 @@ export default function Usecase() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
 
-          {items.length > 0 && (
+          {todayItems.length > 0 && (
             <>
               <div style={s.progressBar}>
                 <div style={{ ...s.progressFill, width: `${progress}%` }} />
               </div>
-              <div style={s.progressText}>{completedCount} of {items.length} completed today</div>
+              <div style={s.progressText}>
+                {completedCount} of {todayItems.length} completed today
+                {notTodayItems.length > 0 && (
+                  <span style={{ color: colors.textDim }}> · {notTodayItems.length} not scheduled today</span>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -374,8 +407,14 @@ export default function Usecase() {
             <p style={{ fontSize: 16, color: colors.textMuted, marginBottom: 4 }}>No checklist items yet</p>
             <p style={{ fontSize: 13 }}>Add your first item to start tracking</p>
           </div>
+        ) : todayItems.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: colors.textDim }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+            <p style={{ fontSize: 16, color: colors.textMuted, marginBottom: 4 }}>Nothing scheduled for today!</p>
+            <p style={{ fontSize: 13 }}>You have {notTodayItems.length} items on other days</p>
+          </div>
         ) : (
-          items.map(item => (
+          todayItems.map(item => (
             <div
               key={item.id}
               style={{ ...s.itemCard, opacity: draggedItem?.id === item.id ? 0.5 : 1 }}
@@ -474,6 +513,41 @@ export default function Usecase() {
               </div>
             </div>
           ))
+        )}
+
+        {/* Not scheduled today section */}
+        {notTodayItems.length > 0 && items.length > 0 && (
+          <div style={{ marginTop: 32 }}>
+            <div style={{ fontSize: 13, color: colors.textDim, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>📅 Not scheduled for {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]}</span>
+            </div>
+            {notTodayItems.map(item => (
+              <div
+                key={item.id}
+                style={{ ...s.itemCard, opacity: 0.5, background: 'transparent' }}
+              >
+                <div style={s.itemRow}>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.itemLabel}>{item.label}</div>
+                    <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2 }}>
+                      {(item.frequency || 'daily').startsWith('custom:')
+                        ? `Scheduled: ${(item.frequency.split(':')[1] || '').toUpperCase().split(',').join(', ')}`
+                        : FREQUENCIES.find(f => f.key === (item.frequency || 'daily'))?.desc || 'Daily'
+                      }
+                    </div>
+                  </div>
+                  <div style={s.itemActions}>
+                    <button
+                      style={s.editBtn}
+                      onClick={() => setEditingItem(item)}
+                    >
+                      ✏️ Edit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         <button

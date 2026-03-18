@@ -18,6 +18,20 @@ export default function QuickCheckin() {
   const [completed, setCompleted] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
+  const todayDayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()]
+
+  // Check if an item should be shown today based on its frequency
+  const shouldShowToday = (item) => {
+    const freq = item.frequency || 'daily'
+    if (freq === 'daily') return true
+    if (freq === 'weekdays') return ['mon', 'tue', 'wed', 'thu', 'fri'].includes(todayDayOfWeek)
+    if (freq === 'weekly') return todayDayOfWeek === 'mon'
+    if (freq.startsWith('custom:')) {
+      const days = freq.split(':')[1]?.split(',') || []
+      return days.includes(todayDayOfWeek)
+    }
+    return true
+  }
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -72,8 +86,8 @@ export default function QuickCheckin() {
 
     setOrbits(uncheckedOrbits)
 
-    // Load first orbit's items
-    const firstOrbitItems = allItems?.filter(i => i.usecase_id === uncheckedOrbits[0].id) || []
+    // Load first orbit's items (only those scheduled for today)
+    const firstOrbitItems = (allItems?.filter(i => i.usecase_id === uncheckedOrbits[0].id) || []).filter(shouldShowToday)
     setItems(firstOrbitItems)
 
     // Load existing entries for first orbit
@@ -96,9 +110,11 @@ export default function QuickCheckin() {
       .from('checklist_items')
       .select('*')
       .eq('usecase_id', orbit.id)
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at')
 
-    setItems(orbitItems || [])
+    // Filter to only items scheduled for today
+    setItems((orbitItems || []).filter(shouldShowToday))
 
     // Load existing entries
     const { data: existingEntries } = await supabase
