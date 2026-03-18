@@ -142,7 +142,41 @@ export default function Dashboard() {
       marginBottom: 6,
     },
     cardDesc: { fontSize: 13, color: colors.textDim, lineHeight: 1.5, marginBottom: 20 },
-    cardFooter: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    cardFooter: { marginBottom: 16 },
+    actionsRow: {
+      display: 'flex',
+      gap: 8,
+      alignItems: 'center',
+    },
+    actionBtnSmall: {
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      background: colors.border,
+      border: 'none',
+      borderRadius: 8,
+      padding: '10px 8px',
+      fontSize: 12,
+      cursor: 'pointer',
+      color: colors.textMuted,
+      fontFamily: 'Nunito, sans-serif',
+      fontWeight: 500,
+      transition: 'all 0.15s',
+    },
+    checkInBtn: {
+      flex: 1.5,
+      background: colors.accentGradient,
+      border: 'none',
+      borderRadius: 8,
+      padding: '10px 12px',
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer',
+      fontFamily: 'Nunito, sans-serif',
+    },
     badge: {
       background: colors.accent + '22',
       border: `1px solid ${colors.accent}44`,
@@ -151,19 +185,7 @@ export default function Dashboard() {
       fontSize: 12,
       color: colors.accent,
     },
-    actions: { display: 'flex', gap: 8 },
-    actionBtn: {
-      background: colors.border,
-      border: `1px solid ${colors.borderLight}`,
-      borderRadius: 8,
-      padding: '6px 14px',
-      fontSize: 12,
-      cursor: 'pointer',
-      color: colors.textMuted,
-      fontFamily: 'Nunito, sans-serif',
-      transition: 'all 0.15s',
-    },
-    reminderBadge: {
+        reminderBadge: {
       display: 'inline-flex',
       alignItems: 'center',
       gap: 4,
@@ -175,21 +197,7 @@ export default function Dashboard() {
       color: '#7dba7d',
       marginLeft: 8,
     },
-    copyBtn: {
-      background: colors.border,
-      border: `1px solid ${colors.borderLight}`,
-      borderRadius: 8,
-      padding: '6px 10px',
-      fontSize: 12,
-      cursor: 'pointer',
-      color: colors.textMuted,
-      fontFamily: 'Nunito, sans-serif',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 4,
-      transition: 'all 0.15s',
-    },
-    emptyState: {
+        emptyState: {
       textAlign: 'center',
       padding: '80px 20px',
       color: colors.textDim,
@@ -438,40 +446,40 @@ export default function Dashboard() {
                   <span style={s.badge}>
                     {todayStats[uc.id] ? `✓ ${todayStats[uc.id]} checked today` : '○ Not checked today'}
                   </span>
-                  <div style={s.actions}>
-                    <button
-                      style={s.actionBtn}
-                      onClick={(e) => { e.stopPropagation(); setEditingOrbit(uc) }}
-                      onMouseEnter={e => { e.target.style.background = colors.borderLight; e.target.style.color = colors.text; e.target.style.borderColor = colors.accent }}
-                      onMouseLeave={e => { e.target.style.background = colors.border; e.target.style.color = colors.textMuted; e.target.style.borderColor = colors.borderLight }}
-                      title="Edit orbit"
-                    >
-                      ⚙️
-                    </button>
-                    <button
-                      style={{ ...s.copyBtn, ...(copiedId === uc.id ? { background: '#1a3a1a', borderColor: '#3d6a3d', color: '#7dba7d' } : {}) }}
-                      onClick={(e) => copyOrbitLink(uc.id, e)}
-                      onMouseEnter={e => { if (copiedId !== uc.id) { e.target.style.background = colors.borderLight; e.target.style.borderColor = colors.accent } }}
-                      onMouseLeave={e => { if (copiedId !== uc.id) { e.target.style.background = colors.border; e.target.style.borderColor = colors.borderLight } }}
-                      title="Copy check-in link"
-                    >
-                      {copiedId === uc.id ? '✓ Copied!' : '🔗'}
-                    </button>
-                    <button
-                      style={s.actionBtn}
-                      onClick={(e) => { e.stopPropagation(); navigate(`/usecase/${uc.id}/stats`) }}
-                      onMouseEnter={e => { e.target.style.background = colors.borderLight; e.target.style.color = colors.text; e.target.style.borderColor = colors.accent }}
-                      onMouseLeave={e => { e.target.style.background = colors.border; e.target.style.color = colors.textMuted; e.target.style.borderColor = colors.borderLight }}
-                    >
-                      Progress
-                    </button>
-                    <button
-                      style={{ ...s.actionBtn, background: colors.accent, color: '#fff', border: 'none' }}
-                      onClick={() => navigate(`/usecase/${uc.id}`)}
-                    >
-                      Check In →
-                    </button>
-                  </div>
+                </div>
+
+                {/* Action buttons - evenly spaced */}
+                <div style={s.actionsRow}>
+                  <button
+                    style={s.actionBtnSmall}
+                    onClick={(e) => { e.stopPropagation(); setEditingOrbit(uc) }}
+                    onMouseEnter={e => { e.currentTarget.style.background = colors.borderLight; e.currentTarget.style.color = colors.text }}
+                    onMouseLeave={e => { e.currentTarget.style.background = colors.border; e.currentTarget.style.color = colors.textMuted }}
+                  >
+                    <span>⚙️</span> Edit
+                  </button>
+                  <button
+                    style={{ ...s.actionBtnSmall, ...(copiedId === uc.id ? { background: '#1a3a1a', color: '#7dba7d' } : {}) }}
+                    onClick={(e) => copyOrbitLink(uc.id, e)}
+                    onMouseEnter={e => { if (copiedId !== uc.id) { e.currentTarget.style.background = colors.borderLight; e.currentTarget.style.color = colors.text } }}
+                    onMouseLeave={e => { if (copiedId !== uc.id) { e.currentTarget.style.background = colors.border; e.currentTarget.style.color = colors.textMuted } }}
+                  >
+                    <span>🔗</span> {copiedId === uc.id ? 'Copied!' : 'Link'}
+                  </button>
+                  <button
+                    style={s.actionBtnSmall}
+                    onClick={(e) => { e.stopPropagation(); navigate(`/usecase/${uc.id}/stats`) }}
+                    onMouseEnter={e => { e.currentTarget.style.background = colors.borderLight; e.currentTarget.style.color = colors.text }}
+                    onMouseLeave={e => { e.currentTarget.style.background = colors.border; e.currentTarget.style.color = colors.textMuted }}
+                  >
+                    <span>📊</span> Stats
+                  </button>
+                  <button
+                    style={s.checkInBtn}
+                    onClick={() => navigate(`/usecase/${uc.id}`)}
+                  >
+                    Check In →
+                  </button>
                 </div>
               </div>
             ))}
