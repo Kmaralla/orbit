@@ -76,12 +76,13 @@ export default function Dashboard() {
       setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: null, notify_time: null })))
       setRemindersEnabled(false)
     } else {
-      // Enable: set user's email on all orbits
+      // Enable: set user's email on all orbits with their timezone
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone // e.g., "America/New_York"
       await supabase
         .from('usecases')
-        .update({ notify_email: userEmail, notify_time: '08:00' })
+        .update({ notify_email: userEmail, notify_time: '08:00', timezone: userTimezone })
         .eq('user_id', user.id)
-      setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: userEmail, notify_time: '08:00' })))
+      setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: userEmail, notify_time: '08:00', timezone: userTimezone })))
       setRemindersEnabled(true)
     }
     setTogglingReminder(false)

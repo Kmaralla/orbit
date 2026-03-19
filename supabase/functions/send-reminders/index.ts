@@ -16,6 +16,7 @@ interface Usecase {
   icon: string
   notify_email: string
   notify_time: string
+  timezone: string
   user_id: string
 }
 
@@ -64,21 +65,17 @@ Deno.serve(async (req) => {
       // No body, that's fine
     }
 
-    // Get current hour in IST (default timezone for now)
-    const currentHourIST = getHourInTimezone('Asia/Kolkata')
-    console.log(`Current hour in IST: ${currentHourIST}`)
-
     // Log invocation start
     await supabase.from('function_logs').insert({
       function_name: 'send-reminders',
       status: 'started',
-      details: { testMode: forceAll, currentHourIST, timestamp: new Date().toISOString() }
+      details: { testMode: forceAll, timestamp: new Date().toISOString() }
     })
 
     // Get all orbits with email reminders enabled
     const { data: allUsecases, error: fetchError } = await supabase
       .from('usecases')
-      .select('id, name, icon, notify_email, notify_time, user_id')
+      .select('id, name, icon, notify_email, notify_time, timezone, user_id')
       .not('notify_email', 'is', null)
 
     if (fetchError) {
@@ -86,14 +83,20 @@ Deno.serve(async (req) => {
       throw fetchError
     }
 
-    // Filter to only orbits whose notify_time matches current hour (unless test mode)
+    // Filter to only orbits whose notify_time matches current hour in USER'S timezone
     const usecases = forceAll
       ? allUsecases
       : (allUsecases as Usecase[])?.filter(uc => {
           if (!uc.notify_time) return false
+
+          // Get current hour in user's timezone (default to IST if not set)
+          const userTimezone = uc.timezone || 'Asia/Kolkata'
+          const currentHourInUserTz = getHourInTimezone(userTimezone)
+
           const reminderHour = parseInt(uc.notify_time.split(':')[0], 10)
-          console.log(`Orbit "${uc.name}": reminder at ${uc.notify_time} (hour ${reminderHour}), current hour: ${currentHourIST}`)
-          return reminderHour === currentHourIST
+          console.log(`Orbit "${uc.name}": reminder at ${uc.notify_time}, user timezone: ${userTimezone}, current hour there: ${currentHourInUserTz}`)
+
+          return reminderHour === currentHourInUserTz
         })
 
     if (!usecases || usecases.length === 0) {
@@ -123,9 +126,10 @@ Deno.serve(async (req) => {
     const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-    // Determine greeting based on time
-    const isEvening = currentHourIST >= 17
-    const isMorning = currentHourIST < 12
+    // Determine greeting based on UTC time (generic)
+    const utcHour = new Date().getUTCHours()
+    const isEvening = utcHour >= 12 // Roughly evening somewhere
+    const isMorning = utcHour < 6
     const greeting = isEvening ? "Evening check-in time" : isMorning ? "Morning check-in time" : "Time for your check-in"
 
     for (let i = 0; i < emails.length; i++) {
@@ -277,7 +281,6 @@ Deno.serve(async (req) => {
       status: 'success',
       details: {
         testMode: forceAll,
-        currentHourIST,
         totalOrbitsWithReminders: allUsecases?.length || 0,
         orbitsMatchingTime: usecases.length,
         sent,
@@ -288,7 +291,6 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        currentHour: currentHourIST,
         testMode: forceAll,
         totalOrbitsWithReminders: allUsecases?.length || 0,
         orbitsMatchingTime: usecases.length,

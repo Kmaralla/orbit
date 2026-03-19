@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 -- If table already exists, add timezone column
 ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC';
 
+-- Add timezone to usecases table for email reminders
+ALTER TABLE usecases ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC';
+
 -- Enable RLS
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
