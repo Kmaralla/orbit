@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: forceAll ? 'No users with reminders configured' : `No reminders scheduled for hour ${currentHourIST}`,
+          message: forceAll ? 'No users with reminders configured' : 'No reminders scheduled for current hour',
           totalOrbitsWithReminders: allUsecases?.length || 0,
           sent: 0
         }),
