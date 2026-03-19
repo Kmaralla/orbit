@@ -1,5 +1,6 @@
 // Orbit Edge Function: Send Push Notifications at 8pm LOCAL TIME
 // Schedule: Run every hour (0 * * * *) - checks which timezones have 8pm
+// Enhanced with streak-at-risk notifications
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
@@ -22,6 +23,53 @@ function getHourInTimezone(timezone: string): number {
   } catch {
     return -1 // Invalid timezone
   }
+}
+
+// Calculate streak for a checklist item (simplified server-side version)
+function calculateStreak(entries: { date: string; value: string }[]): { current: number; atRisk: boolean } {
+  if (!entries || entries.length === 0) {
+    return { current: 0, atRisk: false }
+  }
+
+  // Filter to truthy values and sort descending
+  const sortedEntries = entries
+    .filter(e => e.value && e.value !== '' && e.value !== 'false')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  if (sortedEntries.length === 0) {
+    return { current: 0, atRisk: false }
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayStr = today.toISOString().split('T')[0]
+
+  // Create set of completed dates
+  const completedDates = new Set(sortedEntries.map(e => e.date))
+
+  // Calculate current streak (working backwards from yesterday since it's 8pm)
+  let currentStreak = 0
+  const checkDate = new Date(today)
+
+  // Check if completed today
+  const checkedToday = completedDates.has(todayStr)
+
+  // Count consecutive days
+  for (let i = 0; i < 365; i++) {
+    const dateStr = checkDate.toISOString().split('T')[0]
+    if (completedDates.has(dateStr)) {
+      currentStreak++
+    } else if (dateStr !== todayStr) {
+      // Break if we miss a day (but today is OK to skip)
+      break
+    }
+    checkDate.setDate(checkDate.getDate() - 1)
+  }
+
+  // At risk if: has a streak, not checked today
+  const atRisk = currentStreak > 0 && !checkedToday
+
+  return { current: currentStreak, atRisk }
 }
 
 Deno.serve(async (req) => {
@@ -114,49 +162,139 @@ Deno.serve(async (req) => {
       )
     }
 
-    const results: { userId: string; device: string; timezone: string; success: boolean; error?: string }[] = []
-
+    // Group subscriptions by user_id
+    const userSubscriptions: Record<string, typeof subscriptionsToNotify> = {}
     for (const sub of subscriptionsToNotify) {
-      try {
-        const payload = JSON.stringify({
-          title: '🌟 Time to check in!',
-          body: 'Your orbits are waiting for today\'s check-in',
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: 'orbit-checkin',
-          data: { url: '/quick-checkin' }
-        })
+      if (!userSubscriptions[sub.user_id]) {
+        userSubscriptions[sub.user_id] = []
+      }
+      userSubscriptions[sub.user_id].push(sub)
+    }
 
-        const pushSubscription = {
-          endpoint: sub.endpoint,
-          keys: {
-            p256dh: sub.p256dh,
-            auth: sub.auth
+    const userIds = Object.keys(userSubscriptions)
+    console.log(`Unique users to notify: ${userIds.length}`)
+
+    // Fetch streak data for all users
+    const today = new Date().toISOString().split('T')[0]
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // Get orbits and items for users
+    const { data: userOrbits } = await supabase
+      .from('usecases')
+      .select('id, user_id, name, icon')
+      .in('user_id', userIds)
+
+    const orbitIds = userOrbits?.map(o => o.id) || []
+    const { data: checklistItems } = await supabase
+      .from('checklist_items')
+      .select('id, usecase_id, label')
+      .in('usecase_id', orbitIds)
+
+    const itemIds = checklistItems?.map(i => i.id) || []
+    const { data: recentEntries } = await supabase
+      .from('checkin_entries')
+      .select('checklist_item_id, date, value')
+      .in('checklist_item_id', itemIds)
+      .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+
+    // Build user streak data
+    const userStreakInfo: Record<string, { streaksAtRisk: number; totalOrbits: number; topAtRiskItem?: string }> = {}
+
+    for (const userId of userIds) {
+      const orbits = userOrbits?.filter(o => o.user_id === userId) || []
+      let streaksAtRisk = 0
+      let topAtRiskItem: string | undefined
+
+      for (const orbit of orbits) {
+        const items = checklistItems?.filter(i => i.usecase_id === orbit.id) || []
+        for (const item of items) {
+          const entries = recentEntries
+            ?.filter(e => e.checklist_item_id === item.id)
+            .map(e => ({ date: e.date, value: e.value })) || []
+
+          const streak = calculateStreak(entries)
+          if (streak.atRisk) {
+            streaksAtRisk++
+            if (!topAtRiskItem && streak.current >= 3) {
+              topAtRiskItem = `${orbit.icon} ${item.label} (${streak.current} day streak!)`
+            }
           }
         }
+      }
 
-        await webpush.sendNotification(pushSubscription, payload)
-        console.log(`✓ Push sent to ${sub.device_name} (${sub.timezone})`)
-        results.push({
-          userId: sub.user_id,
-          device: sub.device_name,
-          timezone: sub.timezone || 'UTC',
-          success: true
-        })
+      userStreakInfo[userId] = {
+        streaksAtRisk,
+        totalOrbits: orbits.length,
+        topAtRiskItem
+      }
+    }
 
-      } catch (err: any) {
-        console.error(`✗ Failed for ${sub.device_name}:`, err.message)
-        results.push({
-          userId: sub.user_id,
-          device: sub.device_name,
-          timezone: sub.timezone || 'UTC',
-          success: false,
-          error: err.message
-        })
+    const results: { userId: string; device: string; timezone: string; success: boolean; streaksAtRisk: number; error?: string }[] = []
 
-        // Remove invalid subscription
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await supabase.from('push_subscriptions').delete().eq('id', sub.id)
+    for (const userId of userIds) {
+      const subs = userSubscriptions[userId]
+      const streakInfo = userStreakInfo[userId]
+
+      // Personalize notification based on streak status
+      let title = '🌟 Time to check in!'
+      let body = 'Your orbits are waiting for today\'s check-in'
+
+      if (streakInfo.streaksAtRisk > 0) {
+        if (streakInfo.topAtRiskItem) {
+          title = '⚠️ Streak at risk!'
+          body = `Don't lose your streak: ${streakInfo.topAtRiskItem}`
+        } else {
+          title = '⚠️ Don\'t break your streak!'
+          body = `You have ${streakInfo.streaksAtRisk} streak${streakInfo.streaksAtRisk > 1 ? 's' : ''} at risk today`
+        }
+      }
+
+      const payload = JSON.stringify({
+        title,
+        body,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: 'orbit-checkin',
+        data: { url: '/quick-checkin' }
+      })
+
+      // Send to all user's devices
+      for (const sub of subs) {
+        try {
+          const pushSubscription = {
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth
+            }
+          }
+
+          await webpush.sendNotification(pushSubscription, payload)
+          console.log(`✓ Push sent to ${sub.device_name} (${sub.timezone}) - ${streakInfo.streaksAtRisk} at risk`)
+          results.push({
+            userId: sub.user_id,
+            device: sub.device_name,
+            timezone: sub.timezone || 'UTC',
+            streaksAtRisk: streakInfo.streaksAtRisk,
+            success: true
+          })
+
+        } catch (err: any) {
+          console.error(`✗ Failed for ${sub.device_name}:`, err.message)
+          results.push({
+            userId: sub.user_id,
+            device: sub.device_name,
+            timezone: sub.timezone || 'UTC',
+            streaksAtRisk: streakInfo.streaksAtRisk,
+            success: false,
+            error: err.message
+          })
+
+          // Remove invalid subscription
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            await supabase.from('push_subscriptions').delete().eq('id', sub.id)
+          }
         }
       }
     }

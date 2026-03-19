@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { usePushNotifications } from '../hooks/usePushNotifications'
+import { calculateStreak, getStreakDisplay, calculatePriority } from '../lib/streaks'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 import EditOrbit from '../components/EditOrbit'
@@ -19,6 +20,8 @@ export default function Dashboard() {
   const [showAdd, setShowAdd] = useState(false)
   const [editingOrbit, setEditingOrbit] = useState(null)
   const [todayStats, setTodayStats] = useState({})
+  const [orbitStreaks, setOrbitStreaks] = useState({}) // { orbitId: { current, best, atRisk } }
+  const [topFocus, setTopFocus] = useState([]) // Top 3 priority items
   const [copiedId, setCopiedId] = useState(null)
   const [remindersEnabled, setRemindersEnabled] = useState(false)
   const [togglingReminder, setTogglingReminder] = useState(false)
@@ -48,20 +51,87 @@ export default function Dashboard() {
     const hasReminders = (data || []).some(uc => uc.notify_email)
     setRemindersEnabled(hasReminders)
 
-    // fetch today's checkin counts
-    const today = new Date().toISOString().split('T')[0]
-    const { data: entries } = await supabase
-      .from('checkin_entries')
-      .select('checklist_item_id, checklist_items(usecase_id)')
-      .eq('user_id', user.id)
-      .eq('date', today)
+    if (!data || data.length === 0) {
+      setLoading(false)
+      return
+    }
 
+    // Fetch all checklist items for user's orbits
+    const orbitIds = data.map(uc => uc.id)
+    const { data: items } = await supabase
+      .from('checklist_items')
+      .select('*')
+      .in('usecase_id', orbitIds)
+
+    // Fetch last 60 days of entries for streak calculation
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const { data: allEntries } = await supabase
+      .from('checkin_entries')
+      .select('*, checklist_items(usecase_id, frequency)')
+      .eq('user_id', user.id)
+      .gte('date', sixtyDaysAgo.toISOString().split('T')[0])
+
+    // Calculate today's counts
+    const today = new Date().toISOString().split('T')[0]
     const counts = {}
-    entries?.forEach(e => {
+    allEntries?.filter(e => e.date === today).forEach(e => {
       const uid = e.checklist_items?.usecase_id
       if (uid) counts[uid] = (counts[uid] || 0) + 1
     })
     setTodayStats(counts)
+
+    // Calculate streaks per orbit (aggregate best streak across items)
+    const streaks = {}
+    const itemPriorities = []
+
+    for (const orbit of data) {
+      const orbitItems = items?.filter(i => i.usecase_id === orbit.id) || []
+      let bestCurrentStreak = 0
+      let totalAtRisk = 0
+
+      for (const item of orbitItems) {
+        const itemEntries = allEntries
+          ?.filter(e => e.checklist_item_id === item.id)
+          .map(e => ({ date: e.date, value: e.value })) || []
+
+        const streak = calculateStreak(itemEntries, item.frequency)
+
+        if (streak.current > bestCurrentStreak) {
+          bestCurrentStreak = streak.current
+        }
+        if (streak.atRisk) {
+          totalAtRisk++
+        }
+
+        // Calculate priority for top 3 focus
+        const lastEntry = itemEntries.find(e => e.date === today)
+        const priority = calculatePriority(item, streak, lastEntry)
+        itemPriorities.push({
+          item,
+          orbit,
+          streak,
+          priority,
+          lastEntry
+        })
+      }
+
+      streaks[orbit.id] = {
+        current: bestCurrentStreak,
+        atRisk: totalAtRisk > 0,
+        atRiskCount: totalAtRisk
+      }
+    }
+
+    setOrbitStreaks(streaks)
+
+    // Get top 3 focus items (not completed today, highest priority)
+    const uncompleted = itemPriorities
+      .filter(p => !p.lastEntry || p.lastEntry.value === '' || p.lastEntry.value === 'false')
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 3)
+
+    setTopFocus(uncompleted)
     setLoading(false)
   }
 
@@ -290,6 +360,83 @@ export default function Dashboard() {
       fontFamily: 'Nunito, sans-serif',
       whiteSpace: 'nowrap',
     },
+    focusSection: {
+      background: colors.bgCard,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 16,
+      padding: '20px 24px',
+      marginBottom: 24,
+    },
+    focusTitle: {
+      fontFamily: 'Nunito, sans-serif',
+      fontSize: 16,
+      fontWeight: 700,
+      color: colors.text,
+      marginBottom: 16,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+    },
+    focusItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '12px 0',
+      borderBottom: `1px solid ${colors.border}`,
+    },
+    focusItemLast: {
+      borderBottom: 'none',
+    },
+    focusRank: {
+      width: 28,
+      height: 28,
+      borderRadius: '50%',
+      background: colors.accent,
+      color: '#fff',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 14,
+      fontWeight: 700,
+    },
+    focusContent: {
+      flex: 1,
+    },
+    focusLabel: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: colors.text,
+    },
+    focusOrbit: {
+      fontSize: 12,
+      color: colors.textDim,
+    },
+    focusStreak: {
+      fontSize: 12,
+      fontWeight: 600,
+      padding: '4px 8px',
+      borderRadius: 6,
+    },
+    focusBtn: {
+      background: colors.accent,
+      border: 'none',
+      borderRadius: 8,
+      padding: '8px 14px',
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer',
+    },
+    streakBadge: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      padding: '3px 8px',
+      borderRadius: 6,
+      fontSize: 11,
+      fontWeight: 600,
+      marginLeft: 8,
+    },
   }
 
   const hour = new Date().getHours()
@@ -318,8 +465,55 @@ export default function Dashboard() {
           </button>
         </div>
 
+        {/* Top 3 Focus Section */}
+        {!loading && topFocus.length > 0 && (
+          <div style={s.focusSection}>
+            <div style={s.focusTitle}>
+              <span>🎯</span> Today's Focus
+            </div>
+            {topFocus.map((focus, idx) => {
+              const streakDisplay = getStreakDisplay(focus.streak)
+              return (
+                <div
+                  key={focus.item.id}
+                  style={{
+                    ...s.focusItem,
+                    ...(idx === topFocus.length - 1 ? s.focusItemLast : {})
+                  }}
+                >
+                  <div style={s.focusRank}>{idx + 1}</div>
+                  <div style={s.focusContent}>
+                    <div style={s.focusLabel}>{focus.item.label}</div>
+                    <div style={s.focusOrbit}>
+                      {focus.orbit.icon} {focus.orbit.name}
+                      {focus.streak.atRisk && (
+                        <span style={{ color: '#f59e0b', marginLeft: 8 }}>⚠️ Streak at risk!</span>
+                      )}
+                    </div>
+                  </div>
+                  {focus.streak.current > 0 && (
+                    <div style={{
+                      ...s.focusStreak,
+                      background: streakDisplay.color + '22',
+                      color: streakDisplay.color
+                    }}>
+                      {streakDisplay.emoji} {focus.streak.current} days
+                    </div>
+                  )}
+                  <button
+                    style={s.focusBtn}
+                    onClick={() => navigate(`/usecase/${focus.orbit.id}`)}
+                  >
+                    Check In
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {/* Check-in Nudge Banner */}
-        {!loading && hasUnchecked && (
+        {!loading && hasUnchecked && topFocus.length === 0 && (
           <div style={s.checkinNudge}>
             <span style={s.nudgeIcon}>✨</span>
             <div style={s.nudgeContent}>
@@ -433,8 +627,19 @@ export default function Dashboard() {
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: colors.accentGradient, borderRadius: '20px 20px 0 0' }} />
 
                 <div style={s.cardIcon}>{uc.icon}</div>
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   <span style={s.cardName}>{uc.name}</span>
+                  {orbitStreaks[uc.id]?.current > 0 && (
+                    <span
+                      style={{
+                        ...s.streakBadge,
+                        background: orbitStreaks[uc.id]?.atRisk ? '#f59e0b22' : '#ef444422',
+                        color: orbitStreaks[uc.id]?.atRisk ? '#f59e0b' : '#ef4444',
+                      }}
+                    >
+                      {orbitStreaks[uc.id]?.atRisk ? '⚠️' : '🔥'} {orbitStreaks[uc.id]?.current} days
+                    </span>
+                  )}
                   {uc.notify_email && (
                     <span style={s.reminderBadge} title={`Reminder: ${uc.notify_time} to ${uc.notify_email}`}>
                       🔔 {uc.notify_time?.slice(0, 5)}
