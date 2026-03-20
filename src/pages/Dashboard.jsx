@@ -8,6 +8,7 @@ import { calculateStreak, getStreakDisplay, calculatePriority } from '../lib/str
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 import EditOrbit from '../components/EditOrbit'
+import BuildHabit from '../components/BuildHabit'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
 
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const [usecases, setUsecases] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [showBuildHabit, setShowBuildHabit] = useState(false)
   const [editingOrbit, setEditingOrbit] = useState(null)
   const [todayStats, setTodayStats] = useState({})
   const [orbitStreaks, setOrbitStreaks] = useState({}) // { orbitId: { current, best, atRisk } }
@@ -462,9 +464,22 @@ export default function Dashboard() {
                 : `You have ${usecases.length} orbit${usecases.length > 1 ? 's' : ''} in motion`}
             </p>
           </div>
-          <button style={s.addBtn} onClick={() => setShowAdd(true)}>
-            <span>+</span> New Orbit
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              style={{
+                ...s.addBtn,
+                background: colors.bgCard,
+                border: `1px solid ${colors.accent}`,
+                color: colors.accent,
+              }}
+              onClick={() => setShowBuildHabit(true)}
+            >
+              <span>✨</span> Build Habit
+            </button>
+            <button style={s.addBtn} onClick={() => setShowAdd(true)}>
+              <span>+</span> New Orbit
+            </button>
+          </div>
         </div>
 
         {/* Top Focus Section - show fewer on mobile */}
@@ -763,6 +778,18 @@ export default function Dashboard() {
           onDeleted={(deletedId) => {
             setUsecases(prev => prev.filter(uc => uc.id !== deletedId))
           }}
+        />
+      )}
+
+      {showBuildHabit && (
+        <BuildHabit
+          onClose={() => setShowBuildHabit(false)}
+          onCreated={(orbit) => {
+            setUsecases(prev => [...prev, orbit])
+            setShowBuildHabit(false)
+            navigate(`/usecase/${orbit.id}`)
+          }}
+          userId={user.id}
         />
       )}
 
