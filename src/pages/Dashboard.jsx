@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [editingOrbit, setEditingOrbit] = useState(null)
   const [todayStats, setTodayStats] = useState({})
   const [orbitStreaks, setOrbitStreaks] = useState({}) // { orbitId: { current, best, atRisk } }
+  const [orbitItemCounts, setOrbitItemCounts] = useState({}) // { orbitId: number }
   const [topFocus, setTopFocus] = useState([]) // Top 3 priority items
   const [copiedId, setCopiedId] = useState(null)
   const [remindersEnabled, setRemindersEnabled] = useState(false)
@@ -128,6 +129,13 @@ export default function Dashboard() {
     }
 
     setOrbitStreaks(streaks)
+
+    // Count checklist items per orbit
+    const itemCounts = {}
+    for (const orbit of data) {
+      itemCounts[orbit.id] = items?.filter(i => i.usecase_id === orbit.id).length || 0
+    }
+    setOrbitItemCounts(itemCounts)
 
     // Get top 3 focus items (not completed today, highest priority)
     const uncompleted = itemPriorities
@@ -443,6 +451,22 @@ export default function Dashboard() {
     },
   }
 
+  const HEALTH = {
+    green:  { color: '#22c55e', bg: '#22c55e14', label: '● On Track' },
+    yellow: { color: '#f59e0b', bg: '#f59e0b14', label: '◐ Keep It Up' },
+    red:    { color: '#ef4444', bg: '#ef444414', label: '○ Behind' },
+  }
+
+  const getOrbitHealth = (ucId) => {
+    if (!orbitItemCounts[ucId]) return null // no items yet
+    const checkedToday = !!todayStats[ucId]
+    const streak = orbitStreaks[ucId]?.current || 0
+    const atRisk = orbitStreaks[ucId]?.atRisk || false
+    if (checkedToday && streak >= 3) return 'green'
+    if (!checkedToday && streak < 3) return 'red'
+    return 'yellow' // checked today w/ low streak, or has streak but not checked yet
+  }
+
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || 'there'
@@ -688,8 +712,36 @@ export default function Dashboard() {
                 onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent + '66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
               >
-                {/* Subtle gradient top accent */}
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: colors.accentGradient, borderRadius: '20px 20px 0 0' }} />
+                {/* Health status bar + label */}
+                {(() => {
+                  const health = getOrbitHealth(uc.id)
+                  const h = health ? HEALTH[health] : null
+                  return (
+                    <>
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 4,
+                        background: h ? h.color : colors.accentGradient,
+                        borderRadius: '20px 20px 0 0',
+                        transition: 'background 0.3s',
+                      }} />
+                      {h && (
+                        <div style={{
+                          position: 'absolute', top: 12, right: 14,
+                          background: h.bg,
+                          border: `1px solid ${h.color}44`,
+                          borderRadius: 20,
+                          padding: '3px 10px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: h.color,
+                          letterSpacing: '0.3px',
+                        }}>
+                          {h.label}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
 
                 <div style={s.cardIcon}>{uc.icon}</div>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
