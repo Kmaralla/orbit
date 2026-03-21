@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -9,6 +9,18 @@ export default function Navbar() {
   const { colors, theme, toggleTheme, bgColor, setBgColor } = useTheme()
   const navigate = useNavigate()
   const [showSettings, setShowSettings] = useState(false)
+  const settingsRef = useRef(null)
+
+  useEffect(() => {
+    if (!showSettings) return
+    const handleClickOutside = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) {
+        setShowSettings(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSettings])
 
   const signOut = async () => {
     await supabase.auth.signOut()
@@ -40,7 +52,7 @@ export default function Navbar() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {/* Settings button */}
-        <div style={{ position: 'relative' }}>
+        <div ref={settingsRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setShowSettings(!showSettings)}
             style={{
