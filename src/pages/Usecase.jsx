@@ -43,27 +43,38 @@ export default function Usecase() {
   const [editingItem, setEditingItem] = useState(null)
   const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
   const [draggedItem, setDraggedItem] = useState(null)
-  const [toast, setToast] = useState(null) // { message, emoji }
-  const [celebratedItems] = useState(new Set()) // items celebrated this session
+  const [toast, setToast] = useState(null) // { message, emoji, type }
+  const [glowItem, setGlowItem] = useState(null) // itemId with active glow
+  const [celebratedItems] = useState(new Set())
   const today = new Date().toISOString().split('T')[0]
 
-  const NUDGES = [
-    { emoji: '✅', text: 'Showing up daily' },
-    { emoji: '🔥', text: 'Discipline is a superpower' },
-    { emoji: '⚡', text: 'Building awareness' },
-    { emoji: '🎯', text: 'Small habits, big life' },
-    { emoji: '💪', text: 'You tracked it' },
-    { emoji: '🌱', text: 'One more data point' },
-    { emoji: '✨', text: 'Consistency compounds' },
-    { emoji: '🏅', text: 'Showing up for yourself' },
+  const CHECKBOX_NUDGES = [
+    { emoji: '🔥', text: 'Done!' },
+    { emoji: '⚡', text: 'Crushed it!' },
+    { emoji: '✅', text: 'Nailed it!' },
+    { emoji: '💪', text: 'That\'s the way!' },
+    { emoji: '🎯', text: 'Locked in!' },
+    { emoji: '🏅', text: 'You showed up!' },
+    { emoji: '✨', text: 'Keep going!' },
+    { emoji: '🚀', text: 'On a roll!' },
   ]
 
-  const triggerNudge = (itemId) => {
-    if (celebratedItems.has(itemId)) return // once per item per session
+  const TRACK_NUDGES = [
+    { emoji: '📊', text: 'Logged' },
+    { emoji: '🌱', text: 'Building awareness' },
+    { emoji: '✨', text: 'Consistency compounds' },
+    { emoji: '🎯', text: 'Small habits, big life' },
+  ]
+
+  const triggerNudge = (itemId, valueType) => {
+    if (celebratedItems.has(itemId)) return
     celebratedItems.add(itemId)
-    const nudge = NUDGES[Math.floor(Math.random() * NUDGES.length)]
-    setToast(nudge)
-    setTimeout(() => setToast(null), 1800)
+    const pool = valueType === 'checkbox' ? CHECKBOX_NUDGES : TRACK_NUDGES
+    const nudge = pool[Math.floor(Math.random() * pool.length)]
+    setToast({ ...nudge, type: valueType })
+    setGlowItem(itemId)
+    setTimeout(() => setToast(null), 2000)
+    setTimeout(() => setGlowItem(null), 600)
   }
   const todayDayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()]
 
@@ -133,7 +144,7 @@ export default function Usecase() {
     // Nudge for any type except text, and only when a meaningful value is set
     if (valueType !== 'text') {
       const meaningful = valueType === 'checkbox' ? value === true : String(value).trim() !== ''
-      if (meaningful) triggerNudge(itemId)
+      if (meaningful) triggerNudge(itemId, valueType)
     }
   }
 
@@ -444,14 +455,20 @@ export default function Usecase() {
           todayItems.map(item => (
             <div
               key={item.id}
-              style={{ ...s.itemCard, opacity: draggedItem?.id === item.id ? 0.5 : 1 }}
+              style={{
+                ...s.itemCard,
+                opacity: draggedItem?.id === item.id ? 0.5 : 1,
+                borderColor: glowItem === item.id ? colors.accent : colors.border,
+                boxShadow: glowItem === item.id ? `0 0 0 3px ${colors.accent}33` : 'none',
+                transition: 'border-color 0.2s, box-shadow 0.2s, opacity 0.2s',
+              }}
               draggable
               onDragStart={e => handleDragStart(e, item)}
               onDragOver={e => handleDragOver(e, item)}
               onDrop={e => handleDrop(e, item)}
               onDragEnd={handleDragEnd}
-              onMouseEnter={e => e.currentTarget.style.borderColor = colors.borderLight}
-              onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
+              onMouseEnter={e => { if (glowItem !== item.id) e.currentTarget.style.borderColor = colors.borderLight }}
+              onMouseLeave={e => { if (glowItem !== item.id) e.currentTarget.style.borderColor = colors.border }}
             >
               <div style={s.itemRow}>
                 {/* Drag handle */}
@@ -718,35 +735,52 @@ export default function Usecase() {
       {toast && (
         <div style={{
           position: 'fixed',
-          bottom: 32,
+          top: '42%',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: colors.bgCard,
-          border: `1px solid ${colors.accent}44`,
-          borderRadius: 40,
-          padding: '10px 20px',
+          background: toast.type === 'checkbox'
+            ? 'linear-gradient(135deg, #6c63ff, #9b59b6)'
+            : 'linear-gradient(135deg, #2d2d4a, #3a3a5c)',
+          borderRadius: 50,
+          padding: toast.type === 'checkbox' ? '14px 28px' : '10px 22px',
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          fontSize: 14,
-          fontWeight: 600,
-          color: colors.text,
+          gap: 10,
+          fontSize: toast.type === 'checkbox' ? 17 : 14,
+          fontWeight: 700,
+          color: '#fff',
           fontFamily: 'Nunito, sans-serif',
-          boxShadow: `0 4px 24px ${colors.accent}22`,
-          animation: 'toastIn 0.25s ease',
-          zIndex: 100,
+          boxShadow: toast.type === 'checkbox'
+            ? '0 8px 32px rgba(108, 99, 255, 0.5)'
+            : '0 4px 20px rgba(0,0,0,0.3)',
+          animation: 'toastPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          zIndex: 200,
           pointerEvents: 'none',
           whiteSpace: 'nowrap',
+          letterSpacing: '0.2px',
         }}>
-          <span style={{ fontSize: 18 }}>{toast.emoji}</span>
+          <span style={{
+            fontSize: toast.type === 'checkbox' ? 26 : 20,
+            animation: toast.type === 'checkbox' ? 'emojiPop 0.4s ease' : 'none',
+            display: 'inline-block',
+          }}>
+            {toast.emoji}
+          </span>
           {toast.text}
         </div>
       )}
 
       <style>{`
-        @keyframes toastIn {
-          from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+        @keyframes toastPop {
+          0%   { opacity: 0; transform: translateX(-50%) scale(0.6); }
+          60%  { transform: translateX(-50%) scale(1.08); }
+          80%  { transform: translateX(-50%) scale(0.97); }
+          100% { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+        @keyframes emojiPop {
+          0%   { transform: scale(0.5) rotate(-15deg); }
+          60%  { transform: scale(1.3) rotate(8deg); }
+          100% { transform: scale(1) rotate(0deg); }
         }
       `}</style>
     </div>
