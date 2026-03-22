@@ -43,7 +43,28 @@ export default function Usecase() {
   const [editingItem, setEditingItem] = useState(null)
   const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
   const [draggedItem, setDraggedItem] = useState(null)
+  const [toast, setToast] = useState(null) // { message, emoji }
+  const [celebratedItems] = useState(new Set()) // items celebrated this session
   const today = new Date().toISOString().split('T')[0]
+
+  const NUDGES = [
+    { emoji: '✅', text: 'Showing up daily' },
+    { emoji: '🔥', text: 'Discipline is a superpower' },
+    { emoji: '⚡', text: 'Building awareness' },
+    { emoji: '🎯', text: 'Small habits, big life' },
+    { emoji: '💪', text: 'You tracked it' },
+    { emoji: '🌱', text: 'One more data point' },
+    { emoji: '✨', text: 'Consistency compounds' },
+    { emoji: '🏅', text: 'Showing up for yourself' },
+  ]
+
+  const triggerNudge = (itemId) => {
+    if (celebratedItems.has(itemId)) return // once per item per session
+    celebratedItems.add(itemId)
+    const nudge = NUDGES[Math.floor(Math.random() * NUDGES.length)]
+    setToast(nudge)
+    setTimeout(() => setToast(null), 1800)
+  }
   const todayDayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()]
 
   // Check if an item should be shown today based on its frequency
@@ -91,7 +112,7 @@ export default function Usecase() {
     setLoading(false)
   }
 
-  const saveEntry = async (itemId, value) => {
+  const saveEntry = async (itemId, value, valueType) => {
     setSaving(prev => ({ ...prev, [itemId]: true }))
     const existing = todayEntries[itemId]
 
@@ -108,6 +129,12 @@ export default function Usecase() {
 
     setTodayEntries(prev => ({ ...prev, [itemId]: { ...prev[itemId], checklist_item_id: itemId, value: String(value) } }))
     setSaving(prev => ({ ...prev, [itemId]: false }))
+
+    // Nudge for any type except text, and only when a meaningful value is set
+    if (valueType !== 'text') {
+      const meaningful = valueType === 'checkbox' ? value === true : String(value).trim() !== ''
+      if (meaningful) triggerNudge(itemId)
+    }
   }
 
   const toggleCustomDay = (day) => {
@@ -461,7 +488,7 @@ export default function Usecase() {
                     type="checkbox"
                     style={s.checkbox}
                     checked={todayEntries[item.id]?.value === 'true'}
-                    onChange={e => saveEntry(item.id, e.target.checked)}
+                    onChange={e => saveEntry(item.id, e.target.checked, 'checkbox')}
                   />
                 )}
 
@@ -474,7 +501,7 @@ export default function Usecase() {
                           ...s.scoreBtn,
                           ...(Number(todayEntries[item.id]?.value) === n ? s.scoreBtnActive : {})
                         }}
-                        onClick={() => saveEntry(item.id, n)}
+                        onClick={() => saveEntry(item.id, n, 'score')}
                       >{n}</button>
                     ))}
                   </div>
@@ -491,7 +518,7 @@ export default function Usecase() {
                     onFocus={e => e.target.style.borderColor = colors.accent}
                     onBlur={e => {
                       e.target.style.borderColor = colors.border
-                      if (e.target.value !== (todayEntries[item.id]?.value || '')) saveEntry(item.id, e.target.value)
+                      if (e.target.value !== (todayEntries[item.id]?.value || '')) saveEntry(item.id, e.target.value, item.value_type)
                     }}
                   />
                 )}
@@ -686,6 +713,42 @@ export default function Usecase() {
           </div>
         </div>
       )}
+
+      {/* Dopamine toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 32,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: colors.bgCard,
+          border: `1px solid ${colors.accent}44`,
+          borderRadius: 40,
+          padding: '10px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 14,
+          fontWeight: 600,
+          color: colors.text,
+          fontFamily: 'Nunito, sans-serif',
+          boxShadow: `0 4px 24px ${colors.accent}22`,
+          animation: 'toastIn 0.25s ease',
+          zIndex: 100,
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ fontSize: 18 }}>{toast.emoji}</span>
+          {toast.text}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+        }
+      `}</style>
     </div>
   )
 }
