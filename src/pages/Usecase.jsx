@@ -485,10 +485,14 @@ export default function Usecase() {
                     style={s.textInput}
                     type={item.value_type === 'number' ? 'number' : 'text'}
                     placeholder={item.value_type === 'number' ? '0' : 'Enter value...'}
-                    value={todayEntries[item.id]?.value || ''}
-                    onChange={e => saveEntry(item.id, e.target.value)}
+                    defaultValue={todayEntries[item.id]?.value || ''}
+                    key={item.id + (todayEntries[item.id]?.value ?? '')}
+                    onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
                     onFocus={e => e.target.style.borderColor = colors.accent}
-                    onBlur={e => e.target.style.borderColor = colors.border}
+                    onBlur={e => {
+                      e.target.style.borderColor = colors.border
+                      if (e.target.value !== (todayEntries[item.id]?.value || '')) saveEntry(item.id, e.target.value)
+                    }}
                   />
                 )}
 

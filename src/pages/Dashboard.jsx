@@ -9,6 +9,7 @@ import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 import EditOrbit from '../components/EditOrbit'
 import BuildHabit from '../components/BuildHabit'
+import BuildDay from '../components/BuildDay'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
 
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [showBuildHabit, setShowBuildHabit] = useState(false)
+  const [showBuildDay, setShowBuildDay] = useState(false)
   const [editingOrbit, setEditingOrbit] = useState(null)
   const [todayStats, setTodayStats] = useState({})
   const [orbitStreaks, setOrbitStreaks] = useState({}) // { orbitId: { current, best, atRisk } }
@@ -31,7 +33,13 @@ export default function Dashboard() {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
 
   const userEmail = user?.email || ''
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
   const { isSupported: pushSupported, isSubscribed: pushEnabled, subscribe: subscribePush, unsubscribe: unsubscribePush, loading: pushLoading, error: pushError } = usePushNotifications(user?.id)
 
   const copyOrbitLink = async (ucId, e) => {
@@ -489,12 +497,25 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {usecases.length >= 2 && (
+              <button
+                style={{
+                  ...s.addBtn,
+                  background: colors.bgCard,
+                  border: `1px solid ${colors.accent}`,
+                  color: colors.accent,
+                }}
+                onClick={() => setShowBuildDay(true)}
+              >
+                <span>🗓️</span> Build My Day
+              </button>
+            )}
             <button
               style={{
                 ...s.addBtn,
                 background: colors.bgCard,
-                border: `1px solid ${colors.accent}`,
-                color: colors.accent,
+                border: `1px solid ${colors.borderLight}`,
+                color: colors.textMuted,
               }}
               onClick={() => setShowBuildHabit(true)}
             >
@@ -750,8 +771,8 @@ export default function Dashboard() {
                     <span
                       style={{
                         ...s.streakBadge,
-                        background: orbitStreaks[uc.id]?.atRisk ? '#f59e0b22' : '#ef444422',
-                        color: orbitStreaks[uc.id]?.atRisk ? '#f59e0b' : '#ef4444',
+                        background: orbitStreaks[uc.id]?.atRisk ? '#f59e0b22' : '#22c55e22',
+                        color: orbitStreaks[uc.id]?.atRisk ? '#f59e0b' : '#22c55e',
                       }}
                     >
                       {orbitStreaks[uc.id]?.atRisk ? '⚠️' : '🔥'} {orbitStreaks[uc.id]?.current} days
@@ -830,6 +851,14 @@ export default function Dashboard() {
           onDeleted={(deletedId) => {
             setUsecases(prev => prev.filter(uc => uc.id !== deletedId))
           }}
+        />
+      )}
+
+      {showBuildDay && (
+        <BuildDay
+          orbits={usecases}
+          userId={user.id}
+          onClose={() => setShowBuildDay(false)}
         />
       )}
 

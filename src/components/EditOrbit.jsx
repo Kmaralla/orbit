@@ -397,8 +397,10 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted }) {
                     </span>
                     <input
                       style={{ ...s.itemLabel, background: 'transparent', border: 'none', outline: 'none' }}
-                      value={item.label}
-                      onChange={e => updateItem(item.id, { label: e.target.value })}
+                      defaultValue={item.label}
+                      key={item.id}
+                      onBlur={e => { if (e.target.value !== item.label) updateItem(item.id, { label: e.target.value }) }}
+                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
                     />
                     <span style={s.itemType}>{item.value_type}</span>
                     <button

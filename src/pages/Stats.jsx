@@ -21,7 +21,7 @@ export default function Stats() {
   const [loadingAI, setLoadingAI] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { fetchData() }, [id, period])
+  useEffect(() => { fetchData(); setAnalysis(null) }, [id, period])
 
   const fetchData = async () => {
     const { data: uc } = await supabase.from('usecases').select('*').eq('id', id).single()

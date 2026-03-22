@@ -1,3 +1,94 @@
+export async function getBuildDayPlan(orbitsWithTasks, answers) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+  if (!apiKey) return null
+
+  const context = orbitsWithTasks.map(o => ({
+    id: o.id,
+    name: o.name,
+    icon: o.icon,
+    description: o.description || '',
+    streakDays: o.streakDays,
+    atRisk: o.atRisk,
+    checkedTodayCount: o.checkedTodayCount,
+    tasks: o.tasks.map(t => ({
+      label: t.label,
+      type: t.value_type,
+      frequency: t.frequency || 'daily',
+      checkedToday: t.checkedToday,
+    })),
+  }))
+
+  const timeMap = { quick: '~15 minutes', normal: '~30 minutes', deep: '60+ minutes' }
+  const energyMap = { low: 'low energy / tired', medium: 'moderate energy', high: 'high energy / focused' }
+
+  const prompt = `You help someone build a focused, realistic daily plan from their life-tracking orbits.
+
+ORBITS AND TODAY'S TASKS:
+${JSON.stringify(context, null, 2)}
+
+USER CONTEXT TODAY:
+- Time available: ${timeMap[answers.time] || answers.time}
+- Energy level: ${energyMap[answers.energy] || answers.energy}
+- Priority orbits today: ${answers.focusOrbits.length > 0 ? answers.focusOrbits.join(', ') : 'balanced across all'}
+
+RULES:
+- For quick (~15 min): pick 4–6 tasks max, prioritize at-risk streaks and simple checkboxes
+- For normal (~30 min): 7–10 tasks, balanced across orbits
+- For deep (60+ min): can cover most tasks, encourage thoughtful score/text entries
+- Low energy: favor simple checkbox tasks, avoid text/score tasks requiring reflection
+- High energy: good time for score and text tasks that need real thought
+- ALWAYS include at-risk streak tasks (atRisk: true) — these should almost never be skipped
+- If user named priority orbits, weight them significantly higher
+- For each orbit in the plan, select only the most impactful subset of tasks
+- Each orbit in plan should have 1–4 tasks, not the entire list
+- Skipped orbits need a compassionate one-phrase reason
+
+Respond ONLY with valid JSON, no markdown fences:
+{
+  "greeting": "one warm sentence acknowledging their energy/time situation today",
+  "plan": [
+    {
+      "orbitId": "uuid",
+      "orbitName": "string",
+      "orbitIcon": "emoji",
+      "priority": "high|medium|low",
+      "tasks": ["task label"],
+      "reason": "one sentence — why this orbit and these specific tasks today"
+    }
+  ],
+  "skipped": [
+    { "orbitName": "string", "orbitIcon": "emoji", "reason": "brief reason" }
+  ],
+  "summary": "e.g. 7 tasks across 3 orbits — about 25 minutes"
+}`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  const data = await res.json()
+  if (data.error) return null
+
+  const text = data.content?.find(b => b.type === 'text')?.text || ''
+  try {
+    const clean = text.replace(/```json|```/g, '').trim()
+    return JSON.parse(clean)
+  } catch {
+    return null
+  }
+}
+
 export async function getClaudeAnalysis(usecaseName, entries, items) {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
 
