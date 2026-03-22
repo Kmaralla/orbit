@@ -186,7 +186,7 @@ export default function Dashboard() {
   const s = {
     page: { minHeight: '100vh', background: colors.bg },
     content: { maxWidth: 1100, margin: '0 auto', padding: '40px 24px' },
-    header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 48 },
+    header: { marginBottom: 20 },
     greeting: {
       fontFamily: 'Nunito, sans-serif',
       fontSize: 36,
@@ -496,35 +496,69 @@ export default function Dashboard() {
                 : `You have ${usecases.length} orbit${usecases.length > 1 ? 's' : ''} in motion`}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {usecases.length >= 2 && (
-              <button
-                style={{
-                  ...s.addBtn,
-                  background: colors.bgCard,
-                  border: `1px solid ${colors.accent}`,
-                  color: colors.accent,
-                }}
-                onClick={() => setShowBuildDay(true)}
-              >
-                <span>🗓️</span> Build My Day
-              </button>
-            )}
+        </div>
+
+        {/* Action buttons strip */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
+          {usecases.length >= 2 && (
             <button
               style={{
-                ...s.addBtn,
+                display: 'flex', alignItems: 'center', gap: 12,
                 background: colors.bgCard,
-                border: `1px solid ${colors.borderLight}`,
-                color: colors.textMuted,
+                border: `1px solid ${colors.accent}`,
+                borderRadius: 14, padding: '12px 18px',
+                cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
+                transition: 'all 0.15s',
               }}
-              onClick={() => setShowBuildHabit(true)}
+              onClick={() => setShowBuildDay(true)}
+              onMouseEnter={e => e.currentTarget.style.background = colors.accent + '18'}
+              onMouseLeave={e => e.currentTarget.style.background = colors.bgCard}
             >
-              <span>✨</span> Build Habit
+              <span style={{ fontSize: 22, flexShrink: 0 }}>🗓️</span>
+              <div>
+                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.accent }}>Build My Day</div>
+                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>AI picks your focus for today</div>
+              </div>
             </button>
-            <button style={s.addBtn} onClick={() => setShowAdd(true)}>
-              <span>+</span> New Orbit
-            </button>
-          </div>
+          )}
+          <button
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: colors.bgCard,
+              border: `1px solid ${colors.borderLight}`,
+              borderRadius: 14, padding: '12px 18px',
+              cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
+              transition: 'all 0.15s',
+            }}
+            onClick={() => setShowBuildHabit(true)}
+            onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = colors.borderLight}
+          >
+            <span style={{ fontSize: 22, flexShrink: 0 }}>✨</span>
+            <div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.textMuted }}>Build a Habit</div>
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>AI creates a personalized orbit</div>
+            </div>
+          </button>
+          <button
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: colors.accentGradient,
+              border: 'none',
+              borderRadius: 14, padding: '12px 18px',
+              cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
+              transition: 'opacity 0.15s',
+            }}
+            onClick={() => setShowAdd(true)}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            <span style={{ fontSize: 22, flexShrink: 0 }}>＋</span>
+            <div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: '#fff' }}>New Orbit</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>Manually track anything</div>
+            </div>
+          </button>
         </div>
 
         {/* Top Focus Section - show fewer on mobile */}
