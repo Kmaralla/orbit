@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { playCheckSound, playLogSound } from '../lib/sounds'
 import Navbar from '../components/Navbar'
 
 const VALUE_TYPES = [
@@ -73,6 +74,7 @@ export default function Usecase() {
     const nudge = pool[Math.floor(Math.random() * pool.length)]
     setToast({ ...nudge, type: valueType })
     setGlowItem(itemId)
+    valueType === 'checkbox' ? playCheckSound() : playLogSound()
     setTimeout(() => setToast(null), 2000)
     setTimeout(() => setGlowItem(null), 600)
   }
