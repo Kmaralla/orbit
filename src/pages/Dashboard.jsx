@@ -10,6 +10,7 @@ import AddUsecase from '../components/AddUsecase'
 import EditOrbit from '../components/EditOrbit'
 import BuildHabit from '../components/BuildHabit'
 import BuildDay from '../components/BuildDay'
+import OrbitChat from '../components/OrbitChat'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
 
@@ -585,12 +586,12 @@ export default function Dashboard() {
             <div style={s.focusTitle}>
               <span>🎯</span> Today's Focus
               <button
-                style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${colors.borderLight}`, borderRadius: 8, padding: '4px 12px', fontSize: 12, color: colors.textMuted, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', fontWeight: 600 }}
+                style={{ marginLeft: 'auto', background: `linear-gradient(135deg, ${colors.accent}22, ${colors.accent}44)`, border: `1.5px solid ${colors.accent}88`, borderRadius: 10, padding: '5px 14px', fontSize: 12, color: colors.accent, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, letterSpacing: '0.2px', boxShadow: `0 0 10px ${colors.accent}22` }}
                 onClick={() => navigate('/analytics')}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = colors.borderLight; e.currentTarget.style.color = colors.textMuted }}
+                onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${colors.accent}44, ${colors.accent}66)`; e.currentTarget.style.boxShadow = `0 0 16px ${colors.accent}44` }}
+                onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${colors.accent}22, ${colors.accent}44)`; e.currentTarget.style.boxShadow = `0 0 10px ${colors.accent}22` }}
               >
-                📊 All Progress
+                <span style={{ fontSize: 14 }}>📊</span> Overall Stats
               </button>
             </div>
             {topFocus.slice(0, isMobile ? 2 : 3).map((focus, idx, arr) => {
@@ -672,9 +673,14 @@ export default function Dashboard() {
               onClick={() => setShowNotificationSettings(!showNotificationSettings)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 18 }}>🔔</span>
+                <span style={{ fontSize: 18 }}>⚙️</span>
                 <div>
-                  <div style={s.toggleLabel}>Notifications</div>
+                  <div style={{ ...s.toggleLabel, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    Settings
+                    <span style={{ fontSize: 11, color: colors.textDim, fontWeight: 500 }}>
+                      (Reminders · Push · Timezone)
+                    </span>
+                  </div>
                   <div style={s.toggleSub}>
                     {pushEnabled && remindersEnabled
                       ? `Push & email at ${reminderTime}`
@@ -682,7 +688,7 @@ export default function Dashboard() {
                         ? `Push at ${reminderTime}`
                         : remindersEnabled
                           ? `Email at ${reminderTime}`
-                          : 'Tap to set up reminders'}
+                          : 'Tap to configure'}
                   </div>
                 </div>
               </div>
@@ -979,6 +985,8 @@ export default function Dashboard() {
           userId={user.id}
         />
       )}
+
+      <OrbitChat orbits={usecases} stats={orbitStreaks} />
 
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }

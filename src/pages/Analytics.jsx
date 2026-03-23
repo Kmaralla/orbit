@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { calculateStreak } from '../lib/streaks'
 import Navbar from '../components/Navbar'
+import OrbitChat from '../components/OrbitChat'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 
 export default function Analytics() {
@@ -120,7 +121,7 @@ export default function Analytics() {
 
         <div style={s.header}>
           <div>
-            <h1 style={s.title}>📊 All Progress</h1>
+            <h1 style={s.title}>📊 Overall Stats</h1>
             <div style={{ fontSize: 13, color: colors.textDim, marginTop: 4 }}>
               How you're doing across every orbit and task
             </div>
@@ -208,6 +209,7 @@ export default function Analytics() {
           })
         )}
       </div>
+      <OrbitChat orbits={orbits} stats={stats} />
       <style>{`@keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }`}</style>
     </div>
   )
