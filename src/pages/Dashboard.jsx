@@ -166,6 +166,9 @@ export default function Dashboard() {
 
     setTopFocus(uncompleted)
     setLoading(false)
+
+    // Re-validate today's plan against current orbits (clears stale deleted-orbit tasks)
+    loadTodayPlan(data || [])
   }
 
   const toggleReminders = async () => {
@@ -190,7 +193,7 @@ export default function Dashboard() {
     setTogglingReminder(false)
   }
 
-  const loadTodayPlan = () => {
+  const loadTodayPlan = (activeUsecases) => {
     if (!user?.id) return
     const today = new Date().toISOString().split('T')[0]
     try {
@@ -198,6 +201,18 @@ export default function Dashboard() {
       if (!raw) return
       const stored = JSON.parse(raw)
       if (stored.date !== today) { localStorage.removeItem(`orbit_today_plan_${user.id}`); return }
+
+      // Filter out any orbits that no longer exist (deleted after plan was created)
+      const activeIds = new Set((activeUsecases || usecases).map(u => u.id))
+      if (stored.plan) {
+        stored.plan = stored.plan.filter(p => activeIds.has(p.orbitId))
+      }
+      if (stored.planItems) {
+        Object.keys(stored.planItems).forEach(k => { if (!activeIds.has(k)) delete stored.planItems[k] })
+      }
+      // If the plan is now empty after filtering, clear it
+      if (!stored.plan?.length) { localStorage.removeItem(`orbit_today_plan_${user.id}`); return }
+
       setTodayPlan(stored)
       setPlanEntries(stored.entries || {})
       // Check if already all done
@@ -269,6 +284,8 @@ export default function Dashboard() {
   const deleteUsecase = async (id) => {
     await supabase.from('usecases').delete().eq('id', id)
     setUsecases(prev => prev.filter(u => u.id !== id))
+    // Re-fetch so topFocus, streaks, and item counts drop the deleted orbit
+    fetchUsecases()
   }
 
   const s = {
