@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useTheme } from '../hooks/useTheme'
 import { getBuildDayPlan } from '../lib/claude'
 import { calculateStreak } from '../lib/streaks'
+import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const TIME_OPTIONS = [
   { key: 'quick', label: 'Quick', sub: '~15 min', icon: '⚡' },
@@ -27,10 +28,13 @@ export default function BuildDay({ orbits, userId, onClose }) {
   const { colors } = useTheme()
   const navigate = useNavigate()
 
-  // phase: 'questions' | 'building' | 'plan' | 'error'
+  // phase: 'questions' | 'building' | 'plan' | 'complete' | 'error'
   const [phase, setPhase] = useState('questions')
   const [answers, setAnswers] = useState({ time: null, energy: null, focusOrbits: [] })
   const [plan, setPlan] = useState(null)
+  const [planItems, setPlanItems] = useState({}) // { orbitId: [item, ...] }
+  const [dayEntries, setDayEntries] = useState({}) // { itemId: value }
+  const [saving, setSaving] = useState({}) // { itemId: bool }
 
   // Data fetched in background while user answers questions
   const [orbitsWithTasks, setOrbitsWithTasks] = useState(null)
@@ -146,7 +150,70 @@ export default function BuildDay({ orbits, userId, onClose }) {
       return
     }
     setPlan(result)
+
+    // Build planItems: map Claude's task labels back to real item objects
+    const items = {}
+    for (const planOrbit of result.plan || []) {
+      const orbitData = data.find(o => o.id === planOrbit.orbitId)
+      if (!orbitData) continue
+      items[planOrbit.orbitId] = planOrbit.tasks
+        .map(label => orbitData.tasks.find(t => t.label === label))
+        .filter(Boolean)
+    }
+    setPlanItems(items)
+
+    // Seed dayEntries with already-checked items
+    const initial = {}
+    for (const orbitData of data) {
+      for (const task of orbitData.tasks) {
+        if (task.checkedToday) initial[task.id] = task.value_type === 'checkbox' ? 'true' : '1'
+      }
+    }
+    setDayEntries(initial)
+
     setPhase('plan')
+  }
+
+  const saveEntry = async (itemId, value, valueType) => {
+    setSaving(prev => ({ ...prev, [itemId]: true }))
+    const existing = Object.keys(dayEntries).includes(itemId) && dayEntries[itemId] !== undefined
+
+    if (existing) {
+      const { data: rows } = await supabase
+        .from('checkin_entries')
+        .select('id')
+        .eq('checklist_item_id', itemId)
+        .eq('user_id', userId)
+        .eq('date', today)
+        .limit(1)
+      if (rows?.[0]) {
+        await supabase.from('checkin_entries').update({ value: String(value) }).eq('id', rows[0].id)
+      }
+    } else {
+      await supabase.from('checkin_entries').insert({
+        checklist_item_id: itemId,
+        user_id: userId,
+        date: today,
+        value: String(value),
+      })
+    }
+
+    const newEntries = { ...dayEntries, [itemId]: String(value) }
+    setDayEntries(newEntries)
+    setSaving(prev => ({ ...prev, [itemId]: false }))
+
+    // Play sound
+    valueType === 'checkbox' ? playCheckSound() : playLogSound()
+
+    // Check if all plan items are now done
+    const allIds = Object.values(planItems).flat().map(i => i.id)
+    const doneCount = allIds.filter(id => {
+      const v = id === itemId ? String(value) : newEntries[id]
+      return v && v !== '' && v !== 'false'
+    }).length
+    if (doneCount === allIds.length && allIds.length > 0) {
+      setTimeout(() => setPhase('complete'), 600)
+    }
   }
 
   const s = {
@@ -390,7 +457,7 @@ export default function BuildDay({ orbits, userId, onClose }) {
             Couldn't build your plan
           </div>
           <div style={{ fontSize: 14, color: colors.textDim, marginBottom: 24 }}>
-            No tasks are scheduled for today, or the AI timed out. Try again!
+            No tasks are scheduled for today, or Orbit AI timed out. Try again!
           </div>
           <button style={{ ...s.buildBtn, maxWidth: 200 }} onClick={onClose}>Close</button>
         </div>
@@ -398,9 +465,41 @@ export default function BuildDay({ orbits, userId, onClose }) {
     )
   }
 
+  // ── Complete phase ───────────────────────────────────────────────
+  if (phase === 'complete') {
+    const orbitNames = plan?.plan?.map(p => `${p.orbitIcon} ${p.orbitName}`).join('  ·  ')
+    return (
+      <div style={s.overlay}>
+        <div style={{ ...s.box, alignItems: 'center', justifyContent: 'center', padding: '48px 36px', textAlign: 'center' }}>
+          <div style={{ fontSize: 56, marginBottom: 16, animation: 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>🎉</div>
+          <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 800, color: colors.text, marginBottom: 8, letterSpacing: '-0.5px' }}>
+            Day Complete!
+          </div>
+          <div style={{ fontSize: 14, color: colors.textDim, marginBottom: 24, lineHeight: 1.6 }}>
+            You showed up for every item in today's plan.<br />
+            Streaks are building. Keep the momentum.
+          </div>
+          <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, marginBottom: 32, letterSpacing: '0.3px' }}>
+            {orbitNames}
+          </div>
+          <button style={{ ...s.buildBtn, maxWidth: 240 }} onClick={onClose}>
+            Done 🔥
+          </button>
+          <style>{`@keyframes popIn { 0% { transform: scale(0.3); opacity:0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity:1; } }`}</style>
+        </div>
+      </div>
+    )
+  }
+
   // ── Plan phase ──────────────────────────────────────────────────
   if (phase === 'plan' && plan) {
-    const topOrbit = plan.plan?.[0]
+    const allPlanIds = Object.values(planItems).flat().map(i => i.id)
+    const doneIds = allPlanIds.filter(id => {
+      const v = dayEntries[id]
+      return v && v !== '' && v !== 'false'
+    })
+    const progress = allPlanIds.length > 0 ? Math.round((doneIds.length / allPlanIds.length) * 100) : 0
+
     return (
       <div style={s.overlay} onClick={onClose}>
         <div style={s.box} onClick={e => e.stopPropagation()}>
@@ -412,44 +511,105 @@ export default function BuildDay({ orbits, userId, onClose }) {
             <button style={s.closeBtn} onClick={onClose}>✕</button>
           </div>
 
+          {/* Progress bar */}
+          {allPlanIds.length > 0 && (
+            <div style={{ padding: '10px 28px 0', flexShrink: 0 }}>
+              <div style={{ background: colors.border, borderRadius: 4, height: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${progress}%`, background: progress === 100 ? '#22c55e' : colors.accentGradient, borderRadius: 4, transition: 'width 0.4s ease' }} />
+              </div>
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 5, textAlign: 'right' }}>
+                {doneIds.length} / {allPlanIds.length} done
+              </div>
+            </div>
+          )}
+
           <div style={s.body}>
             <p style={s.greeting}>"{plan.greeting}"</p>
 
-            {/* Orbit plan cards */}
-            {plan.plan?.map((item) => {
-              const pc = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium
+            {/* Orbit plan cards with inline check-ins */}
+            {plan.plan?.map((planOrbit) => {
+              const pc = PRIORITY_COLORS[planOrbit.priority] || PRIORITY_COLORS.medium
+              const orbitPlanItems = planItems[planOrbit.orbitId] || []
+              const orbitDone = orbitPlanItems.length > 0 && orbitPlanItems.every(item => {
+                const v = dayEntries[item.id]
+                return v && v !== '' && v !== 'false'
+              })
+
               return (
                 <div
-                  key={item.orbitId}
-                  style={{ ...s.orbitCard, background: pc.bg, borderColor: pc.border }}
+                  key={planOrbit.orbitId}
+                  style={{ ...s.orbitCard, background: orbitDone ? '#22c55e0e' : pc.bg, borderColor: orbitDone ? '#22c55e44' : pc.border }}
                 >
                   <div style={s.orbitCardHeader}>
-                    <span style={{ fontSize: 22 }}>{item.orbitIcon}</span>
-                    <span style={s.orbitCardName}>{item.orbitName}</span>
-                    {item.priority === 'high' && (
-                      <span style={{ ...s.priorityBadge, background: pc.label + '22', color: pc.label }}>
-                        {pc.badge}
-                      </span>
-                    )}
+                    <span style={{ fontSize: 22 }}>{planOrbit.orbitIcon}</span>
+                    <span style={s.orbitCardName}>{planOrbit.orbitName}</span>
+                    {orbitDone
+                      ? <span style={{ ...s.priorityBadge, background: '#22c55e22', color: '#22c55e' }}>✓ Done</span>
+                      : planOrbit.priority === 'high' && <span style={{ ...s.priorityBadge, background: pc.label + '22', color: pc.label }}>{pc.badge}</span>
+                    }
                   </div>
 
-                  <div style={s.taskList}>
-                    {item.tasks.map((task, i) => (
-                      <div key={i} style={s.taskItem}>
-                        <div style={{ ...s.taskDot, background: pc.label }} />
-                        {task}
-                      </div>
-                    ))}
+                  {/* Inline checklist items */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+                    {orbitPlanItems.map(item => {
+                      const val = dayEntries[item.id]
+                      const done = val && val !== '' && val !== 'false'
+                      return (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                          <div style={{ flex: 1, fontSize: 13, color: done ? colors.textDim : colors.text, fontWeight: 500, textDecoration: done ? 'line-through' : 'none' }}>
+                            {item.label}
+                          </div>
+                          {saving[item.id] && <span style={{ fontSize: 10, color: colors.accent }}>•••</span>}
+
+                          {item.value_type === 'checkbox' && (
+                            <button
+                              style={{ width: 28, height: 28, borderRadius: '50%', border: `2px solid ${done ? '#22c55e' : pc.label}`, background: done ? '#22c55e' : 'transparent', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}
+                              onClick={() => saveEntry(item.id, !done, 'checkbox')}
+                            >
+                              {done ? '✓' : ''}
+                            </button>
+                          )}
+
+                          {item.value_type === 'score' && (
+                            <div style={{ display: 'flex', gap: 3 }}>
+                              {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                                <button
+                                  key={n}
+                                  style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${Number(val) === n ? pc.label : colors.border}`, background: Number(val) === n ? pc.label : 'transparent', color: Number(val) === n ? '#fff' : colors.textDim, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
+                                  onClick={() => saveEntry(item.id, n, 'score')}
+                                >{n}</button>
+                              ))}
+                            </div>
+                          )}
+
+                          {item.value_type === 'number' && (
+                            <input
+                              style={{ width: 60, background: colors.bgInput, border: `1px solid ${colors.border}`, borderRadius: 7, padding: '5px 8px', color: colors.text, fontSize: 13, outline: 'none', textAlign: 'center' }}
+                              type="number"
+                              placeholder="0"
+                              defaultValue={val || ''}
+                              key={item.id + (val ?? '')}
+                              onBlur={e => { if (e.target.value) saveEntry(item.id, e.target.value, 'number') }}
+                              onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {/* Items in plan without matched objects (show read-only) */}
+                    {planOrbit.tasks
+                      .filter(label => !orbitPlanItems.find(i => i.label === label))
+                      .map((label, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', opacity: 0.5 }}>
+                          <div style={{ ...s.taskDot, background: pc.label }} />
+                          <div style={{ flex: 1, fontSize: 13, color: colors.textMuted }}>{label}</div>
+                        </div>
+                      ))
+                    }
                   </div>
 
-                  <div style={s.orbitReason}>{item.reason}</div>
-
-                  <button
-                    style={{ ...s.checkinBtn, background: pc.label }}
-                    onClick={() => { navigate(`/usecase/${item.orbitId}`); onClose() }}
-                  >
-                    Check In →
-                  </button>
+                  <div style={s.orbitReason}>{planOrbit.reason}</div>
                 </div>
               )
             })}
@@ -470,14 +630,9 @@ export default function BuildDay({ orbits, userId, onClose }) {
           </div>
 
           <div style={s.footer}>
-            {topOrbit && (
-              <button
-                style={s.buildBtn}
-                onClick={() => { navigate(`/usecase/${topOrbit.orbitId}`); onClose() }}
-              >
-                Start with {topOrbit.orbitIcon} {topOrbit.orbitName} →
-              </button>
-            )}
+            <button style={{ ...s.buildBtn, opacity: 0.7 }} onClick={onClose}>
+              Close
+            </button>
           </div>
         </div>
       </div>

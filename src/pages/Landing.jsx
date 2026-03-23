@@ -13,7 +13,7 @@ const ORBITS = [
 const HOW_IT_WORKS = [
   { step: '1', icon: '🎯', title: 'Create Orbits', desc: 'Set up areas you want to track' },
   { step: '2', icon: '✓', title: 'Daily Check-in', desc: '30 seconds to log progress' },
-  { step: '3', icon: '📊', title: 'See Patterns', desc: 'AI finds trends & actions' },
+  { step: '3', icon: '📊', title: 'See Patterns', desc: 'Orbit AI finds trends & actions' },
 ]
 
 // Typewriter demo sequence
@@ -25,7 +25,7 @@ const TYPEWRITER_DEMO = [
   { type: 'item', text: '  🔢 Blood pressure reading' },
   { type: 'item', text: '  📝 Any symptoms or notes' },
   { type: 'step', text: '→ Check in daily in 30 seconds' },
-  { type: 'step', text: '→ AI spots patterns & trends ✨' },
+  { type: 'step', text: '→ Orbit AI spots patterns & trends ✨' },
 ]
 
 export default function Landing() {
@@ -467,8 +467,8 @@ export default function Landing() {
             fontSize: isMobile ? 12 : 14,
             minHeight: isMobile ? 180 : 160,
           }}>
-            <div style={{ color: colors.accent, marginBottom: 12, fontFamily: 'Nunito, sans-serif', fontWeight: 700, fontSize: isMobile ? 13 : 14 }}>
-              ✨ See how it works
+            <div style={{ color: colors.accent, marginBottom: 14, fontFamily: 'Nunito, sans-serif', fontWeight: 800, fontSize: isMobile ? 15 : 17, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: isMobile ? 16 : 18 }}>✨</span> See how it works
             </div>
             {TYPEWRITER_DEMO.slice(0, currentLine).map((line, i) => (
               <div
@@ -503,7 +503,7 @@ export default function Landing() {
             <span style={{ color: colors.accent }}>most.</span>
           </h1>
           <p style={s.subline}>
-            Create orbits for different areas of your life. Check in daily. Get AI insights on your patterns.
+            Create orbits for different areas of your life. Check in daily. Get Orbit AI insights on your patterns.
           </p>
           <div style={s.orbitGrid}>
             {ORBITS.map(o => (
@@ -531,7 +531,7 @@ export default function Landing() {
         </div>
 
         <div style={s.footer}>
-          Free forever · Powered by Claude AI · <span style={{ color: colors.textMuted, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => navigate('/privacy')}>Privacy</span>
+          Small habits, big life · <span style={{ color: colors.textMuted, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => navigate('/privacy')}>Privacy Policy</span>
         </div>
       </div>
 

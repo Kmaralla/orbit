@@ -517,7 +517,7 @@ export default function Dashboard() {
               <span style={{ fontSize: 22, flexShrink: 0 }}>🗓️</span>
               <div>
                 <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.accent }}>Build My Day</div>
-                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>AI picks your focus for today</div>
+                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>Plan today from your existing orbits</div>
               </div>
             </button>
           )}
@@ -536,8 +536,8 @@ export default function Dashboard() {
           >
             <span style={{ fontSize: 22, flexShrink: 0 }}>✨</span>
             <div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.textMuted }}>Build a Habit</div>
-              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>AI creates a personalized orbit</div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.textMuted }}>Build an Orbit</div>
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>Orbit AI designs a new orbit for you</div>
             </div>
           </button>
           <button
@@ -566,11 +566,14 @@ export default function Dashboard() {
           <div style={s.focusSection}>
             <div style={s.focusTitle}>
               <span>🎯</span> Today's Focus
-              {topFocus.length > 1 && (
-                <span style={{ fontSize: 12, fontWeight: 400, color: colors.textDim, marginLeft: 'auto' }}>
-                  {topFocus.length} items
-                </span>
-              )}
+              <button
+                style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${colors.borderLight}`, borderRadius: 8, padding: '4px 12px', fontSize: 12, color: colors.textMuted, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', fontWeight: 600 }}
+                onClick={() => navigate('/analytics')}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = colors.borderLight; e.currentTarget.style.color = colors.textMuted }}
+              >
+                📊 All Progress
+              </button>
             </div>
             {topFocus.slice(0, isMobile ? 2 : 3).map((focus, idx, arr) => {
               const streakDisplay = getStreakDisplay(focus.streak)

@@ -394,14 +394,14 @@ export default function Stats() {
 
         {/* AI Analysis */}
         <div style={s.card}>
-          <div style={s.cardTitle}>🤖 AI Trend Analysis</div>
+          <div style={s.cardTitle}>🤖 Orbit AI Analysis</div>
           {!analysis ? (
             <button
               style={s.aiBtn}
               onClick={runAIAnalysis}
               disabled={loadingAI}
             >
-              {loadingAI ? '⟳ Analyzing your data...' : '✨ Generate Claude AI Analysis'}
+              {loadingAI ? '⟳ Orbit AI is analyzing...' : '✨ Ask Orbit AI'}
             </button>
           ) : (
             <div style={s.analysisCard}>

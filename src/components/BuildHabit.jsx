@@ -550,7 +550,7 @@ Create a simple tracking orbit for this habit.`
           {/* Loading state */}
           {loading && step === 2 && (
             <div style={s.loadingText}>
-              <span style={s.sparkle}>✨</span> AI is crafting your personalized orbit...
+              <span style={s.sparkle}>✨</span> Orbit AI is crafting your orbit...
             </div>
           )}
         </div>
