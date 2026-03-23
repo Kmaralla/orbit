@@ -11,6 +11,7 @@ import EditOrbit from '../components/EditOrbit'
 import BuildHabit from '../components/BuildHabit'
 import BuildDay from '../components/BuildDay'
 import OrbitChat from '../components/OrbitChat'
+import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
 
@@ -34,6 +35,10 @@ export default function Dashboard() {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
   const [userTimezone, setUserTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [reminderTime, setReminderTime] = useState('08:00')
+  const [todayPlan, setTodayPlan] = useState(null)   // { plan, planItems, greeting, summary }
+  const [planEntries, setPlanEntries] = useState({})  // { itemId: value }
+  const [planSaving, setPlanSaving] = useState({})
+  const [planAllDone, setPlanAllDone] = useState(false)
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -183,6 +188,70 @@ export default function Dashboard() {
       setRemindersEnabled(true)
     }
     setTogglingReminder(false)
+  }
+
+  const loadTodayPlan = () => {
+    if (!user?.id) return
+    const today = new Date().toISOString().split('T')[0]
+    try {
+      const raw = localStorage.getItem(`orbit_today_plan_${user.id}`)
+      if (!raw) return
+      const stored = JSON.parse(raw)
+      if (stored.date !== today) { localStorage.removeItem(`orbit_today_plan_${user.id}`); return }
+      setTodayPlan(stored)
+      setPlanEntries(stored.entries || {})
+      // Check if already all done
+      const allIds = Object.values(stored.planItems || {}).flat().map(i => i.id)
+      const done = allIds.every(id => { const v = (stored.entries || {})[id]; return v && v !== '' && v !== 'false' })
+      if (allIds.length > 0 && done) setPlanAllDone(true)
+    } catch {}
+  }
+
+  useEffect(() => { loadTodayPlan() }, [user])
+
+  const savePlanEntry = async (itemId, value, valueType) => {
+    setPlanSaving(prev => ({ ...prev, [itemId]: true }))
+    const today = new Date().toISOString().split('T')[0]
+    await supabase.from('checkin_entries').upsert({
+      checklist_item_id: itemId,
+      user_id: user.id,
+      date: today,
+      value: String(value),
+    }, { onConflict: 'checklist_item_id,user_id,date' })
+
+    const newEntries = { ...planEntries, [itemId]: String(value) }
+    setPlanEntries(newEntries)
+    setPlanSaving(prev => ({ ...prev, [itemId]: false }))
+
+    // Persist entries to localStorage
+    try {
+      const raw = localStorage.getItem(`orbit_today_plan_${user.id}`)
+      if (raw) {
+        const stored = JSON.parse(raw)
+        stored.entries = newEntries
+        localStorage.setItem(`orbit_today_plan_${user.id}`, JSON.stringify(stored))
+      }
+    } catch {}
+
+    // Sound
+    valueType === 'checkbox' ? playCheckSound() : playLogSound()
+
+    // Check all done
+    const allIds = Object.values(todayPlan?.planItems || {}).flat().map(i => i.id)
+    const doneCount = allIds.filter(id => {
+      const v = id === itemId ? String(value) : newEntries[id]
+      return v && v !== '' && v !== 'false'
+    }).length
+    if (doneCount === allIds.length && allIds.length > 0) {
+      setTimeout(() => setPlanAllDone(true), 500)
+    }
+  }
+
+  const dismissPlan = () => {
+    try { localStorage.removeItem(`orbit_today_plan_${user.id}`) } catch {}
+    setTodayPlan(null)
+    setPlanEntries({})
+    setPlanAllDone(false)
   }
 
   const saveTimezoneSettings = async (newTimezone, newTime) => {
@@ -535,8 +604,8 @@ export default function Dashboard() {
             >
               <span style={{ fontSize: 22, flexShrink: 0 }}>🗓️</span>
               <div>
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.accent }}>Build My Day</div>
-                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>Plan today from your existing orbits</div>
+                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.accent }}>{todayPlan ? 'Replan My Day' : 'Plan My Day'}</div>
+                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>{todayPlan ? 'Generate a new plan for today' : 'Pick top priorities across your orbits'}</div>
               </div>
             </button>
           )}
@@ -657,6 +726,109 @@ export default function Dashboard() {
             >
               Check In Now →
             </button>
+          </div>
+        )}
+
+        {/* ── Today's Priorities ───────────────────────────────────── */}
+        {todayPlan && !loading && (
+          <div style={{ marginBottom: 28 }}>
+            {planAllDone ? (
+              // All done celebration
+              <div style={{ background: 'linear-gradient(135deg, #22c55e18, #22c55e08)', border: '1.5px solid #22c55e44', borderRadius: 20, padding: '24px 28px', textAlign: 'center', animation: 'fadeIn 0.4s ease' }}>
+                <div style={{ fontSize: 44, marginBottom: 10 }}>🎉</div>
+                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 800, color: '#22c55e', marginBottom: 6 }}>Day Complete!</div>
+                <div style={{ fontSize: 14, color: colors.textDim, marginBottom: 16 }}>All today's priorities done. Streaks building. Keep the momentum.</div>
+                <button onClick={dismissPlan} style={{ background: 'none', border: `1px solid ${colors.border}`, borderRadius: 8, padding: '6px 16px', color: colors.textDim, fontSize: 12, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>Dismiss</button>
+              </div>
+            ) : (() => {
+              const allPlanIds = Object.values(todayPlan.planItems || {}).flat().map(i => i.id)
+              const doneCount = allPlanIds.filter(id => { const v = planEntries[id]; return v && v !== '' && v !== 'false' }).length
+              const progress = allPlanIds.length > 0 ? Math.round((doneCount / allPlanIds.length) * 100) : 0
+              const PCOLS = { high: { bg: '#22c55e18', border: '#22c55e44', label: '#22c55e' }, medium: { bg: '#6c63ff18', border: '#6c63ff44', label: '#6c63ff' }, low: { bg: '#ffffff08', border: '#ffffff18', label: '#8a86a0' } }
+
+              return (
+                <div style={{ background: colors.bgCard, border: `1.5px solid ${colors.accent}55`, borderRadius: 20, overflow: 'hidden' }}>
+                  {/* Header */}
+                  <div style={{ padding: '16px 20px 12px', borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 20 }}>🎯</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 800, color: colors.text }}>Today's Priorities</div>
+                      <div style={{ fontSize: 12, color: colors.accent, marginTop: 1 }}>{todayPlan.summary}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: colors.textDim, marginRight: 4 }}>{doneCount}/{allPlanIds.length} done</div>
+                    <button onClick={dismissPlan} style={{ background: 'none', border: 'none', color: colors.textDim, fontSize: 16, cursor: 'pointer', lineHeight: 1, padding: 4 }} title="Dismiss plan">✕</button>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div style={{ height: 3, background: colors.border }}>
+                    <div style={{ height: '100%', width: `${progress}%`, background: progress === 100 ? '#22c55e' : colors.accentGradient, transition: 'width 0.4s ease' }} />
+                  </div>
+
+                  {/* Orbit sections */}
+                  <div style={{ padding: '12px 20px 16px' }}>
+                    {(todayPlan.plan || []).map(planOrbit => {
+                      const pc = PCOLS[planOrbit.priority] || PCOLS.medium
+                      const items = (todayPlan.planItems || {})[planOrbit.orbitId] || []
+                      const orbitDone = items.length > 0 && items.every(item => { const v = planEntries[item.id]; return v && v !== '' && v !== 'false' })
+
+                      return (
+                        <div key={planOrbit.orbitId} style={{ marginBottom: 12, background: orbitDone ? '#22c55e0a' : pc.bg, border: `1.5px solid ${orbitDone ? '#22c55e33' : pc.border}`, borderRadius: 14, padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontSize: 18 }}>{planOrbit.orbitIcon}</span>
+                            <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text, flex: 1 }}>{planOrbit.orbitName}</span>
+                            {orbitDone
+                              ? <span style={{ fontSize: 11, fontWeight: 700, background: '#22c55e22', color: '#22c55e', padding: '2px 8px', borderRadius: 10 }}>✓ Done</span>
+                              : planOrbit.priority === 'high' && <span style={{ fontSize: 11, fontWeight: 700, background: pc.label + '22', color: pc.label, padding: '2px 8px', borderRadius: 10 }}>Must Do</span>
+                            }
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {items.map(item => {
+                              const val = planEntries[item.id]
+                              const done = val && val !== '' && val !== 'false'
+                              return (
+                                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  {/* Checkbox */}
+                                  {item.value_type === 'checkbox' && (
+                                    <button
+                                      onClick={() => savePlanEntry(item.id, !done, 'checkbox')}
+                                      style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${done ? '#22c55e' : pc.label}`, background: done ? '#22c55e' : 'transparent', color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}
+                                    >{done ? '✓' : ''}</button>
+                                  )}
+                                  {/* Score */}
+                                  {item.value_type === 'score' && (
+                                    <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                                        <button key={n} onClick={() => savePlanEntry(item.id, n, 'score')} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${Number(val) === n ? pc.label : colors.border}`, background: Number(val) === n ? pc.label : 'transparent', color: Number(val) === n ? '#fff' : colors.textDim, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>{n}</button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {/* Number */}
+                                  {item.value_type === 'number' && (
+                                    <input type="number" placeholder="0" defaultValue={val || ''} key={item.id + (val ?? '')}
+                                      style={{ width: 56, background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 7, padding: '4px 8px', color: colors.text, fontSize: 12, outline: 'none', textAlign: 'center', flexShrink: 0 }}
+                                      onBlur={e => { if (e.target.value) savePlanEntry(item.id, e.target.value, 'number') }}
+                                      onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+                                    />
+                                  )}
+                                  <span style={{ fontSize: 13, color: done ? colors.textDim : colors.text, textDecoration: done ? 'line-through' : 'none', flex: 1 }}>{item.label}</span>
+                                  {planSaving[item.id] && <span style={{ fontSize: 10, color: colors.accent }}>•••</span>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {todayPlan.greeting && (
+                      <div style={{ fontSize: 12, color: colors.textDim, fontStyle: 'italic', marginTop: 4, paddingTop: 8, borderTop: `1px solid ${colors.border}` }}>
+                        "{todayPlan.greeting}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -837,6 +1009,14 @@ export default function Dashboard() {
             </button>
           </div>
         ) : (
+          <>
+          {todayPlan && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1, height: 1, background: colors.border }} />
+              <span style={{ fontSize: 12, color: colors.textDim, fontWeight: 600, letterSpacing: '0.6px', textTransform: 'uppercase' }}>All Orbits</span>
+              <div style={{ flex: 1, height: 1, background: colors.border }} />
+            </div>
+          )}
           <div style={s.grid}>
             {usecases.map(uc => (
               <div
@@ -940,6 +1120,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
 
@@ -970,7 +1151,8 @@ export default function Dashboard() {
         <BuildDay
           orbits={usecases}
           userId={user.id}
-          onClose={() => setShowBuildDay(false)}
+          onClose={() => { setShowBuildDay(false); loadTodayPlan() }}
+          onPlanSaved={loadTodayPlan}
         />
       )}
 
