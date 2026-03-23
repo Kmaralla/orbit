@@ -138,23 +138,46 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Filter subscriptions where local time is 8pm (20:00), unless test mode
+    // Fetch notify_time per user from usecases (use first orbit's setting per user)
+    const allUserIds = [...new Set(allSubscriptions.map(s => s.user_id))]
+    const { data: notifyConfigs } = await supabase
+      .from('usecases')
+      .select('user_id, notify_time, timezone')
+      .in('user_id', allUserIds)
+      .not('notify_time', 'is', null)
+
+    // Build map: user_id → { notifyHour, timezone }
+    const userNotifyConfig: Record<string, { notifyHour: number; timezone: string }> = {}
+    for (const config of notifyConfigs || []) {
+      if (!userNotifyConfig[config.user_id]) {
+        const hour = parseInt((config.notify_time || '20:00').split(':')[0], 10)
+        userNotifyConfig[config.user_id] = {
+          notifyHour: isNaN(hour) ? 20 : hour,
+          timezone: config.timezone || 'UTC'
+        }
+      }
+    }
+
+    // Filter subscriptions where current local time matches user's configured notify hour
+    // Fall back to 8pm (20:00) for users without a configured time
     const subscriptionsToNotify = forceAll
       ? allSubscriptions
       : allSubscriptions.filter(sub => {
-          const tz = sub.timezone || 'UTC'
-          const hour = getHourInTimezone(tz)
-          console.log(`User ${sub.user_id} timezone: ${tz}, current hour: ${hour}`)
-          return hour === 20 // 8pm
+          const config = userNotifyConfig[sub.user_id]
+          const tz = config?.timezone || sub.timezone || 'UTC'
+          const notifyHour = config?.notifyHour ?? 20
+          const currentHour = getHourInTimezone(tz)
+          console.log(`User ${sub.user_id} tz: ${tz}, notify at: ${notifyHour}h, current: ${currentHour}h`)
+          return currentHour === notifyHour
         })
 
     console.log(`Total subscriptions: ${allSubscriptions.length}`)
-    console.log(`Subscriptions at 8pm local time: ${subscriptionsToNotify.length}`)
+    console.log(`Subscriptions matching notify time: ${subscriptionsToNotify.length}`)
 
     if (subscriptionsToNotify.length === 0) {
       return new Response(
         JSON.stringify({
-          message: 'No users at 8pm local time right now',
+          message: 'No users at their configured notification time right now',
           totalSubscriptions: allSubscriptions.length,
           sent: 0
         }),
@@ -309,7 +332,7 @@ Deno.serve(async (req) => {
       details: {
         testMode: forceAll,
         totalSubscriptions: allSubscriptions.length,
-        atLocalTime8pm: subscriptionsToNotify.length,
+        matchingNotifyTime: subscriptionsToNotify.length,
         sent,
         failed
       }
@@ -317,7 +340,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        message: forceAll ? 'Test: sent to all users' : 'Sent to users at 8pm local time',
+        message: forceAll ? 'Test: sent to all users' : 'Sent to users at their configured notify time',
         totalSubscriptions: allSubscriptions.length,
         sent,
         failed,

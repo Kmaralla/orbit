@@ -31,6 +31,8 @@ export default function Dashboard() {
   const [remindersEnabled, setRemindersEnabled] = useState(false)
   const [togglingReminder, setTogglingReminder] = useState(false)
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
+  const [userTimezone, setUserTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  const [reminderTime, setReminderTime] = useState('08:00')
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -63,6 +65,11 @@ export default function Dashboard() {
     // Check if any orbit has reminders enabled
     const hasReminders = (data || []).some(uc => uc.notify_email)
     setRemindersEnabled(hasReminders)
+
+    // Load stored timezone and reminder time from first orbit that has them
+    const firstWithSettings = (data || []).find(uc => uc.timezone || uc.notify_time)
+    if (firstWithSettings?.timezone) setUserTimezone(firstWithSettings.timezone)
+    if (firstWithSettings?.notify_time) setReminderTime(firstWithSettings.notify_time.slice(0, 5))
 
     if (!data || data.length === 0) {
       setLoading(false)
@@ -167,15 +174,26 @@ export default function Dashboard() {
       setRemindersEnabled(false)
     } else {
       // Enable: set user's email on all orbits with their timezone
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone // e.g., "America/New_York"
       await supabase
         .from('usecases')
-        .update({ notify_email: userEmail, notify_time: '08:00', timezone: userTimezone })
+        .update({ notify_email: userEmail, notify_time: reminderTime, timezone: userTimezone })
         .eq('user_id', user.id)
-      setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: userEmail, notify_time: '08:00', timezone: userTimezone })))
+      setUsecases(prev => prev.map(uc => ({ ...uc, notify_email: userEmail, notify_time: reminderTime, timezone: userTimezone })))
       setRemindersEnabled(true)
     }
     setTogglingReminder(false)
+  }
+
+  const saveTimezoneSettings = async (newTimezone, newTime) => {
+    const tz = newTimezone ?? userTimezone
+    const time = newTime ?? reminderTime
+    if (newTimezone) setUserTimezone(newTimezone)
+    if (newTime) setReminderTime(newTime)
+    // Always persist timezone; only update notify_time if reminders are enabled
+    const update = remindersEnabled
+      ? { timezone: tz, notify_time: time }
+      : { timezone: tz }
+    await supabase.from('usecases').update(update).eq('user_id', user.id)
   }
 
   const deleteUsecase = async (id) => {
@@ -659,11 +677,11 @@ export default function Dashboard() {
                   <div style={s.toggleLabel}>Notifications</div>
                   <div style={s.toggleSub}>
                     {pushEnabled && remindersEnabled
-                      ? 'Push & email enabled'
+                      ? `Push & email at ${reminderTime}`
                       : pushEnabled
-                        ? 'Push enabled'
+                        ? `Push at ${reminderTime}`
                         : remindersEnabled
-                          ? 'Email enabled'
+                          ? `Email at ${reminderTime}`
                           : 'Tap to set up reminders'}
                   </div>
                 </div>
@@ -693,7 +711,7 @@ export default function Dashboard() {
                       {pushError
                         ? pushError
                         : pushEnabled
-                          ? 'Daily reminder at 8pm'
+                          ? `Daily reminder at ${reminderTime}`
                           : 'Get notified on this device'}
                     </div>
                   </div>
@@ -740,6 +758,57 @@ export default function Dashboard() {
                       }}
                     />
                   </div>
+                </div>
+
+                {/* Timezone + Time settings */}
+                <div style={{ width: '100%', background: colors.bgCard, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, color: colors.textDim, flexShrink: 0 }}>🕐 Reminder time</span>
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={e => saveTimezoneSettings(undefined, e.target.value)}
+                    style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text, padding: '4px 10px', fontSize: 13, fontFamily: 'Nunito, sans-serif', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 13, color: colors.textDim, flexShrink: 0 }}>🌍 Timezone</span>
+                  <select
+                    value={userTimezone}
+                    onChange={e => saveTimezoneSettings(e.target.value, undefined)}
+                    style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 8, color: colors.text, padding: '4px 10px', fontSize: 13, fontFamily: 'Nunito, sans-serif', cursor: 'pointer', flex: 1, minWidth: 180 }}
+                  >
+                    {[
+                      ['Asia/Kolkata', 'India (IST, UTC+5:30)'],
+                      ['Asia/Dubai', 'Dubai (GST, UTC+4)'],
+                      ['Asia/Singapore', 'Singapore (SGT, UTC+8)'],
+                      ['Asia/Tokyo', 'Tokyo (JST, UTC+9)'],
+                      ['Asia/Dhaka', 'Dhaka (BST, UTC+6)'],
+                      ['Asia/Karachi', 'Karachi (PKT, UTC+5)'],
+                      ['Asia/Colombo', 'Sri Lanka (SLST, UTC+5:30)'],
+                      ['Europe/London', 'London (GMT/BST)'],
+                      ['Europe/Paris', 'Paris (CET, UTC+1/2)'],
+                      ['Europe/Berlin', 'Berlin (CET, UTC+1/2)'],
+                      ['America/New_York', 'New York (ET, UTC-5/4)'],
+                      ['America/Chicago', 'Chicago (CT, UTC-6/5)'],
+                      ['America/Denver', 'Denver (MT, UTC-7/6)'],
+                      ['America/Los_Angeles', 'Los Angeles (PT, UTC-8/7)'],
+                      ['America/Toronto', 'Toronto (ET, UTC-5/4)'],
+                      ['America/Vancouver', 'Vancouver (PT, UTC-8/7)'],
+                      ['America/Sao_Paulo', 'São Paulo (BRT, UTC-3)'],
+                      ['Australia/Sydney', 'Sydney (AEDT, UTC+11/10)'],
+                      ['Australia/Melbourne', 'Melbourne (AEDT, UTC+11/10)'],
+                      ['Pacific/Auckland', 'Auckland (NZST, UTC+12/13)'],
+                    ].map(([tz, label]) => (
+                      <option key={tz} value={tz}>{label}</option>
+                    ))}
+                    {/* Show current timezone if not in list */}
+                    {![
+                      'Asia/Kolkata','Asia/Dubai','Asia/Singapore','Asia/Tokyo','Asia/Dhaka','Asia/Karachi','Asia/Colombo',
+                      'Europe/London','Europe/Paris','Europe/Berlin',
+                      'America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Toronto','America/Vancouver','America/Sao_Paulo',
+                      'Australia/Sydney','Australia/Melbourne','Pacific/Auckland'
+                    ].includes(userTimezone) && (
+                      <option value={userTimezone}>{userTimezone}</option>
+                    )}
+                  </select>
                 </div>
               </div>
             )}

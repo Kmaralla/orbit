@@ -126,12 +126,6 @@ Deno.serve(async (req) => {
     const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-    // Determine greeting based on UTC time (generic)
-    const utcHour = new Date().getUTCHours()
-    const isEvening = utcHour >= 12 // Roughly evening somewhere
-    const isMorning = utcHour < 6
-    const greeting = isEvening ? "Evening check-in time" : isMorning ? "Morning check-in time" : "Time for your check-in"
-
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i]
 
@@ -141,6 +135,14 @@ Deno.serve(async (req) => {
       }
 
       const orbits = orbitsByEmail[email]
+
+      // Greeting based on user's local timezone
+      const userTz = orbits[0]?.timezone || 'Asia/Kolkata'
+      const userHour = getHourInTimezone(userTz)
+      const greeting = userHour >= 17 ? "Evening check-in time"
+        : userHour >= 12 ? "Afternoon check-in time"
+        : userHour >= 5 ? "Morning check-in time"
+        : "Time for your check-in"
 
       const orbitLinksHtml = orbits.map(uc => `
         <tr>
