@@ -82,186 +82,117 @@ Deno.serve(async (req) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Build My Day — New in Orbit</title>
+  <title>the moment you actually finish a goal</title>
 </head>
-<body style="margin:0;padding:0;background:#080810;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#080810;padding:32px 16px;">
-  <tr><td align="center">
-  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
-    <!-- Logo -->
-    <tr><td style="padding-bottom:28px;">
-      <span style="font-size:22px;font-weight:700;color:#e8e4f0;">
-        <span style="color:#6c63ff;">●</span> Orbit
-      </span>
-    </td></tr>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:36px 20px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:500px;">
 
-    <!-- Hero -->
-    <tr><td style="padding-bottom:24px;">
-      <div style="background:linear-gradient(135deg,#1a1040 0%,#0d0d1a 100%);border:1px solid #6c63ff55;border-radius:20px;padding:32px 28px;text-align:center;">
-        <div style="font-size:44px;margin-bottom:16px;">🗓️</div>
-        <h1 style="color:#e8e4f0;font-size:26px;font-weight:800;margin:0 0 12px 0;letter-spacing:-0.5px;line-height:1.2;">
-          Introducing: Build My Day
-        </h1>
-        <p style="color:#a8a4c8;font-size:16px;margin:0;line-height:1.7;">
-          You track life across multiple orbits — but every morning the question is the same:<br>
-          <strong style="color:#e8e4f0;">What do I actually focus on today?</strong>
-        </p>
-        <div style="margin-top:20px;padding:16px;background:#ffffff08;border-radius:12px;">
-          <p style="color:#8a86a0;font-size:14px;margin:0;line-height:1.6;">
-            Answer 3 quick questions. Orbit's AI looks at all your tasks, your streaks, and what you told it — then hands you a focused, realistic plan for the day. No overwhelm. Just clarity.
-          </p>
-        </div>
-      </div>
-    </td></tr>
-
-    <!-- The problem it solves -->
-    <tr><td style="padding-bottom:20px;">
-      <div style="background:#0d0d1a;border:1px solid #1a1a2e;border-radius:16px;padding:22px 24px;">
-        <div style="color:#6c63ff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">The problem it solves</div>
-        <p style="color:#a8a4c8;font-size:14px;line-height:1.7;margin:0;">
-          When you track ${orbitCount > 1 ? `${orbitCount} orbits` : 'multiple orbits'} you might have <strong style="color:#e8e4f0;">15–20 tasks available on any given day</strong>. Trying to do all of them is exhausting. Ignoring some feels like failure.
-          <br><br>
-          Build My Day cuts through that. On a busy day with low energy, it picks your 5 most important tasks. On a free day when you're fired up, it opens everything up. The AI understands <em>what actually matters</em> based on your orbits, your streaks, and how you feel today.
-        </p>
-      </div>
-    </td></tr>
-
-    <!-- How it works — visual flow -->
-    <tr><td style="padding-bottom:20px;">
-      <div style="background:#0d0d1a;border:1px solid #1a1a2e;border-radius:16px;padding:22px 24px;">
-        <div style="color:#6c63ff;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:20px;">How it works — 3 steps</div>
-
-        <!-- Step 1 -->
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-          <tr>
-            <td width="36" valign="top">
-              <div style="width:28px;height:28px;background:linear-gradient(135deg,#6c63ff,#9b59b6);border-radius:50%;color:#fff;font-size:13px;font-weight:700;text-align:center;line-height:28px;">1</div>
-            </td>
-            <td style="padding-left:12px;">
-              <div style="color:#e8e4f0;font-size:14px;font-weight:700;margin-bottom:8px;">Tap "Build My Day" on your dashboard</div>
-              <!-- Mini mockup of the button -->
-              <div style="background:#0a0a16;border:1px solid #1a1a2e;border-radius:12px;padding:12px 16px;display:inline-block;">
-                <span style="color:#a8a4c8;font-size:12px;">Dashboard buttons:</span>
-                <div style="margin-top:8px;display:flex;gap:8px;">
-                  <span style="display:inline-block;background:#1a1a2e;border:1px solid #6c63ff;border-radius:8px;padding:7px 14px;color:#6c63ff;font-size:12px;font-weight:600;">🗓️ Build My Day</span>
-                  <span style="display:inline-block;background:#1a1a2e;border:1px solid #2a2a40;border-radius:8px;padding:7px 14px;color:#8a86a0;font-size:12px;">+ New Orbit</span>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Step 2 -->
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-          <tr>
-            <td width="36" valign="top">
-              <div style="width:28px;height:28px;background:linear-gradient(135deg,#6c63ff,#9b59b6);border-radius:50%;color:#fff;font-size:13px;font-weight:700;text-align:center;line-height:28px;">2</div>
-            </td>
-            <td style="padding-left:12px;">
-              <div style="color:#e8e4f0;font-size:14px;font-weight:700;margin-bottom:8px;">Answer 3 quick questions</div>
-              <!-- Mini mockup of the questions -->
-              <div style="background:#0a0a16;border:1px solid #1a1a2e;border-radius:12px;padding:14px 16px;">
-                <div style="color:#6b6890;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">How much time do you have?</div>
-                <div style="margin-bottom:12px;">
-                  <span style="display:inline-block;background:#6c63ff22;border:1.5px solid #6c63ff;border-radius:10px;padding:6px 14px;color:#6c63ff;font-size:12px;font-weight:600;margin-right:6px;">⚡ Quick  15 min</span>
-                  <span style="display:inline-block;background:#1a1a2e;border:1px solid #2a2a40;border-radius:10px;padding:6px 14px;color:#4a4860;font-size:12px;margin-right:6px;">✓ Normal</span>
-                  <span style="display:inline-block;background:#1a1a2e;border:1px solid #2a2a40;border-radius:10px;padding:6px 14px;color:#4a4860;font-size:12px;">🎯 All In</span>
-                </div>
-                <div style="color:#6b6890;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">What's your energy?</div>
-                <div>
-                  <span style="display:inline-block;background:#1a1a2e;border:1px solid #2a2a40;border-radius:10px;padding:6px 14px;color:#4a4860;font-size:12px;margin-right:6px;">🔋 Low</span>
-                  <span style="display:inline-block;background:#6c63ff22;border:1.5px solid #6c63ff;border-radius:10px;padding:6px 14px;color:#6c63ff;font-size:12px;font-weight:600;margin-right:6px;">⚡ Good</span>
-                  <span style="display:inline-block;background:#1a1a2e;border:1px solid #2a2a40;border-radius:10px;padding:6px 14px;color:#4a4860;font-size:12px;">🚀 High</span>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Step 3 -->
-        <table width="100%" cellpadding="0" cellspacing="0">
-          <tr>
-            <td width="36" valign="top">
-              <div style="width:28px;height:28px;background:linear-gradient(135deg,#6c63ff,#9b59b6);border-radius:50%;color:#fff;font-size:13px;font-weight:700;text-align:center;line-height:28px;">3</div>
-            </td>
-            <td style="padding-left:12px;">
-              <div style="color:#e8e4f0;font-size:14px;font-weight:700;margin-bottom:8px;">Get your personalized plan</div>
-              <!-- Mini mockup of a plan card -->
-              <div style="background:#0a0a16;border:1px solid #1a1a2e;border-radius:12px;padding:14px 16px;">
-                <!-- High priority orbit card -->
-                <div style="background:#22c55e18;border:1.5px solid #22c55e44;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
-                  <div style="display:flex;align-items:center;margin-bottom:8px;">
-                    <span style="font-size:18px;">👴</span>
-                    <span style="color:#e8e4f0;font-size:13px;font-weight:700;margin-left:8px;flex:1;">Dad's Health</span>
-                    <span style="background:#22c55e22;color:#22c55e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Must Do</span>
-                  </div>
-                  <div style="color:#a8a4c8;font-size:12px;line-height:1.8;">
-                    · Morning medication check<br>
-                    · Blood pressure log
-                  </div>
-                  <div style="color:#6b6890;font-size:11px;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a2e;">
-                    Streak at risk — takes 2 minutes, keeps the data flowing.
-                  </div>
-                </div>
-                <!-- Medium priority -->
-                <div style="background:#6c63ff18;border:1.5px solid #6c63ff44;border-radius:10px;padding:12px 14px;">
-                  <div style="display:flex;align-items:center;margin-bottom:8px;">
-                    <span style="font-size:18px;">💼</span>
-                    <span style="color:#e8e4f0;font-size:13px;font-weight:700;margin-left:8px;flex:1;">Career Goals</span>
-                    <span style="background:#6c63ff22;color:#6c63ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Do It</span>
-                  </div>
-                  <div style="color:#a8a4c8;font-size:12px;">· Daily learning block</div>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </table>
-      </div>
-    </td></tr>
-
-    <!-- Key insight callout -->
-    <tr><td style="padding-bottom:24px;">
-      <div style="background:linear-gradient(135deg,#6c63ff15,#9b59b615);border:1px solid #6c63ff33;border-radius:16px;padding:20px 24px;text-align:center;">
-        <p style="color:#c8c4e8;font-size:15px;line-height:1.7;margin:0;">
-          💡 <strong style="color:#e8e4f0;">The AI never tells you what to value</strong> — it just looks at what you're already tracking, where your streaks are, and what you told it about your day. Then it makes a call so you don't have to.
-        </p>
-      </div>
-    </td></tr>
-
-    <!-- CTA -->
-    <tr><td style="padding-bottom:28px;text-align:center;">
-      <a href="${appUrl}/dashboard"
-         style="display:inline-block;background:linear-gradient(135deg,#6c63ff 0%,#9b59b6 100%);color:#fff;padding:18px 40px;border-radius:14px;text-decoration:none;font-size:17px;font-weight:700;letter-spacing:0.2px;box-shadow:0 4px 24px rgba(108,99,255,0.4);">
-        🗓️ Build My Day →
-      </a>
-      <div style="color:#4a4860;font-size:12px;margin-top:10px;">Takes less than 30 seconds</div>
-    </td></tr>
-
-    <!-- Your orbits reminder -->
-    ${orbitCount > 0 ? `
-    <tr><td style="padding-bottom:24px;">
-      <div style="background:#0d0d1a;border:1px solid #1a1a2e;border-radius:16px;padding:20px 24px;">
-        <div style="color:#e8e4f0;font-size:14px;font-weight:600;margin-bottom:12px;">📋 Your orbits are waiting for today's check-in</div>
-        <div style="margin-bottom:16px;">${orbitPreview}${userData.orbits.length > 3 ? `<span style="color:#4a4860;font-size:12px;"> +${userData.orbits.length - 3} more</span>` : ''}</div>
-        <a href="${appUrl}/dashboard"
-           style="display:inline-block;background:#1a1a2e;color:#6c63ff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #6c63ff44;">
-          Open Orbit →
-        </a>
-      </div>
-    </td></tr>
-    ` : ''}
-
-    <!-- Footer -->
-    <tr><td style="text-align:center;padding-top:8px;">
-      <p style="color:#2a2848;font-size:11px;margin:0;line-height:1.8;">
-        You're getting this because you use Orbit.<br>
-        Keep showing up — small habits, big life. 🌱
-      </p>
-    </td></tr>
-
-  </table>
+  <!-- Logo -->
+  <tr><td style="padding-bottom:28px;">
+    <span style="font-size:17px;font-weight:700;color:#1a1a2e;letter-spacing:-0.3px;">
+      <span style="color:#6c63ff;">●</span> Orbit
+    </span>
   </td></tr>
+
+  <!-- Opening -->
+  <tr><td style="padding-bottom:20px;">
+    <p style="font-size:17px;color:#1a1a2e;margin:0 0 14px 0;line-height:1.65;font-weight:400;">
+      There's a specific feeling when you actually finish something you set out to do.
+    </p>
+    <p style="font-size:17px;color:#1a1a2e;margin:0 0 14px 0;line-height:1.65;">
+      Not just crossing it off a to-do list. But genuinely closing a chapter — <em>"I showed up. I did the work. It's done."</em>
+    </p>
+    <p style="font-size:17px;color:#1a1a2e;margin:0 0 0 0;line-height:1.65;">
+      That moment deserves more than just deleting an app or archiving a note. We wanted to give it a proper ceremony.
+    </p>
+  </td></tr>
+
+  <tr><td style="padding:8px 0 24px 0;border-top:1px solid #f0f0f5;border-bottom:none;"></td></tr>
+
+  <!-- Feature: Close Orbit -->
+  <tr><td style="padding-bottom:24px;">
+    <p style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6c63ff;margin:0 0 14px 0;">New in Orbit</p>
+
+    <p style="font-size:17px;font-weight:700;color:#1a1a2e;margin:0 0 10px 0;line-height:1.4;">
+      🏁 Close an Orbit — with a proper celebration
+    </p>
+    <p style="font-size:15px;color:#444460;margin:0 0 16px 0;line-height:1.7;">
+      You can now set a goal end date on any orbit. When that date arrives, Orbit taps you on the shoulder and asks: <strong>did you achieve it?</strong>
+    </p>
+    <p style="font-size:15px;color:#444460;margin:0 0 20px 0;line-height:1.7;">
+      If yes — you get the moment you earned. Your stats appear: how many days you showed up, your best streak, completion rate. And a screen that says, plainly: <strong>Goal Achieved.</strong>
+    </p>
+
+    <!-- Celebration mockup -->
+    <div style="background:linear-gradient(135deg,#1a3a1a,#0d1a0d);border-radius:16px;padding:28px 24px;text-align:center;margin-bottom:20px;">
+      <div style="font-size:48px;margin-bottom:10px;">🏆</div>
+      <div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:6px;font-family:-apple-system,sans-serif;">Goal Achieved!</div>
+      <div style="font-size:14px;color:#86efac;margin-bottom:18px;line-height:1.5;">You did it. Your orbit is complete.</div>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="33%" style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px 6px;">
+            <div style="font-size:20px;font-weight:800;color:#22c55e;font-family:-apple-system,sans-serif;">21</div>
+            <div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">best streak</div>
+          </td>
+          <td width="4%"></td>
+          <td width="33%" style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px 6px;">
+            <div style="font-size:20px;font-weight:800;color:#22c55e;font-family:-apple-system,sans-serif;">28</div>
+            <div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">days tracked</div>
+          </td>
+          <td width="4%"></td>
+          <td width="33%" style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px 6px;">
+            <div style="font-size:20px;font-weight:800;color:#22c55e;font-family:-apple-system,sans-serif;">84%</div>
+            <div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">completion</div>
+          </td>
+        </tr>
+      </table>
+      <div style="font-size:13px;color:#4ade80;margin-top:16px;line-height:1.7;">28 days of showing up.<br>That's what builds a life.</div>
+    </div>
+
+    <p style="font-size:15px;color:#444460;margin:0 0 14px 0;line-height:1.7;">
+      And if you didn't quite get there? That's okay too. Orbit closes with grace — shows what you <em>did</em> build, and reminds you that every attempt lays the foundation for the next one.
+    </p>
+    <p style="font-size:15px;color:#444460;margin:0 0 0 0;line-height:1.7;">
+      You can also extend the end date if you need more time. No judgment. Just flexibility.
+    </p>
+  </td></tr>
+
+  <tr><td style="padding:4px 0 24px 0;border-top:1px solid #f0f0f5;"></td></tr>
+
+  <!-- How to use it -->
+  <tr><td style="padding-bottom:24px;">
+    <p style="font-size:14px;font-weight:700;color:#1a1a2e;margin:0 0 12px 0;">How to try it</p>
+    <p style="font-size:14px;color:#555570;margin:0 0 6px 0;line-height:1.7;">
+      1. Open any orbit → hit ⚙️ Edit → add a <strong>Goal end date</strong>
+    </p>
+    <p style="font-size:14px;color:#555570;margin:0 0 6px 0;line-height:1.7;">
+      2. When the date arrives, you'll see a <strong>🏁 Close or extend</strong> prompt on your dashboard
+    </p>
+    <p style="font-size:14px;color:#555570;margin:0 0 20px 0;line-height:1.7;">
+      3. Tell Orbit whether you achieved it — and if you did, take a moment to actually feel it
+    </p>
+    <a href="${appUrl}/dashboard"
+       style="display:inline-block;background:#6c63ff;color:#ffffff;padding:13px 26px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.1px;">
+      Open Orbit →
+    </a>
+  </td></tr>
+
+  <!-- Sign-off -->
+  <tr><td style="padding-top:8px;border-top:1px solid #f0f0f5;">
+    <p style="font-size:14px;color:#555570;margin:16px 0 4px 0;line-height:1.6;">
+      The small act of saying <em>"I finished this"</em> is underrated. We hope this helps.<br><br>
+      — Karthiek
+    </p>
+    <p style="font-size:12px;color:#aaa8be;margin:12px 0 0 0;line-height:1.7;">
+      You're getting this because you use Orbit. That's it.
+    </p>
+  </td></tr>
+
+</table>
+</td></tr>
 </table>
 </body>
 </html>`.trim()
@@ -274,9 +205,9 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Orbit <hello@orbityours.com>',
+            from: 'Karthiek from Orbit <hello@orbityours.com>',
             to: email,
-            subject: '🗓️ New: Build My Day — let AI plan your morning',
+            subject: 'the moment you actually finish a goal',
             html: emailHtml,
           }),
         })
@@ -301,7 +232,7 @@ Deno.serve(async (req) => {
     await supabase.from('function_logs').insert({
       function_name: 'send-announcement',
       status: 'success',
-      details: { sent, failed, subject: 'Build My Day Feature Launch' }
+      details: { sent, failed, subject: 'the moment you actually finish a goal' }
     })
 
     return new Response(
