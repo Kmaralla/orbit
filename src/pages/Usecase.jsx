@@ -441,6 +441,38 @@ export default function Usecase() {
           )}
         </div>
 
+        {/* Closed orbit banner */}
+        {usecase?.closed_at && (
+          <div style={{ background: 'linear-gradient(90deg, #6c63ff18, #6c63ff08)', border: '1px solid #6c63ff33', borderRadius: 14, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>{usecase.goal_achieved ? '🏆' : '🌱'}</span>
+            <div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 700, color: colors.textMuted }}>This orbit is closed</div>
+              <div style={{ fontSize: 13, color: colors.textDim, marginTop: 2 }}>
+                {usecase.goal_achieved ? 'Goal achieved! ' : ''}Closed on {new Date(usecase.closed_at).toLocaleDateString()}. Check-ins are read-only.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Expired (goal date passed but not closed) banner */}
+        {!usecase?.closed_at && usecase?.end_date && usecase.end_date < new Date().toISOString().split('T')[0] && (
+          <div style={{ background: 'linear-gradient(90deg, #f59e0b18, #f59e0b08)', border: '1px solid #f59e0b44', borderRadius: 14, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>🏁</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>Goal date reached</div>
+              <div style={{ fontSize: 13, color: colors.textDim, marginTop: 2 }}>
+                Your goal end date was {usecase.end_date}. Head back to close or extend this orbit.
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/dashboard')}
+              style={{ background: '#f59e0b22', border: '1px solid #f59e0b66', borderRadius: 8, padding: '7px 14px', color: '#f59e0b', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap' }}
+            >
+              Go to Dashboard →
+            </button>
+          </div>
+        )}
+
         {items.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: colors.textDim }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>

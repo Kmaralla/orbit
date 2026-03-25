@@ -11,6 +11,7 @@ import EditOrbit from '../components/EditOrbit'
 import BuildHabit from '../components/BuildHabit'
 import BuildDay from '../components/BuildDay'
 import OrbitChat from '../components/OrbitChat'
+import CloseOrbit from '../components/CloseOrbit'
 import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
@@ -35,10 +36,12 @@ export default function Dashboard() {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
   const [userTimezone, setUserTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [reminderTime, setReminderTime] = useState('08:00')
-  const [todayPlan, setTodayPlan] = useState(null)   // { plan, planItems, greeting, summary }
-  const [planEntries, setPlanEntries] = useState({})  // { itemId: value }
+  const [todayPlan, setTodayPlan] = useState(null)
+  const [planEntries, setPlanEntries] = useState({})
   const [planSaving, setPlanSaving] = useState({})
   const [planAllDone, setPlanAllDone] = useState(false)
+  const [closingOrbit, setClosingOrbit] = useState(null) // orbit object to close
+  const [showClosedOrbits, setShowClosedOrbits] = useState(false)
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -1035,13 +1038,31 @@ export default function Dashboard() {
             </div>
           )}
           <div style={s.grid}>
-            {usecases.map(uc => (
+            {usecases.filter(uc => !uc.closed_at).map(uc => {
+              const today = new Date().toISOString().split('T')[0]
+              const isExpired = uc.end_date && uc.end_date < today
+              const daysLeft = uc.end_date && !isExpired
+                ? Math.ceil((new Date(uc.end_date) - new Date(today)) / (1000 * 60 * 60 * 24))
+                : null
+              return (
               <div
                 key={uc.id}
-                style={s.card}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent + '66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
+                style={{ ...s.card, borderColor: isExpired ? '#f59e0b66' : colors.border }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = isExpired ? '#f59e0b' : colors.accent + '66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = isExpired ? '#f59e0b66' : colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
               >
+              {/* Expired banner */}
+              {isExpired && (
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'linear-gradient(90deg,#f59e0b22,#f59e0b11)', borderRadius: '20px 20px 0 0', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700 }}>🏁 Goal date reached</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); setClosingOrbit(uc) }}
+                    style={{ background: '#f59e0b22', border: '1px solid #f59e0b66', borderRadius: 6, padding: '3px 10px', color: '#f59e0b', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}
+                  >
+                    Close or extend →
+                  </button>
+                </div>
+              )}
                 {/* Health status bar + label */}
                 {(() => {
                   const health = getOrbitHealth(uc.id)
@@ -1092,6 +1113,11 @@ export default function Dashboard() {
                       🔔 {uc.notify_time?.slice(0, 5)}
                     </span>
                   )}
+                  {daysLeft !== null && (
+                    <span style={{ ...s.reminderBadge, background: daysLeft <= 3 ? '#f59e0b22' : colors.border, color: daysLeft <= 3 ? '#f59e0b' : colors.textDim }} title={`Goal ends ${uc.end_date}`}>
+                      🏁 {daysLeft}d left
+                    </span>
+                  )}
                 </div>
                 <div style={s.cardDesc}>{uc.description || 'Daily check-in tracking'}</div>
 
@@ -1135,8 +1161,40 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
+
+          {/* Completed Orbits section */}
+          {usecases.filter(uc => uc.closed_at).length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <button
+                onClick={() => setShowClosedOrbits(!showClosedOrbits)}
+                style={{ background: 'none', border: `1px solid ${colors.border}`, borderRadius: 10, padding: '8px 16px', color: colors.textDim, fontSize: 13, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <span style={{ transition: 'transform 0.2s', display: 'inline-block', transform: showClosedOrbits ? 'rotate(90deg)' : 'rotate(0)' }}>▸</span>
+                Completed Orbits ({usecases.filter(uc => uc.closed_at).length})
+              </button>
+              {showClosedOrbits && (
+                <div style={{ ...s.grid, marginTop: 12, opacity: 0.75 }}>
+                  {usecases.filter(uc => uc.closed_at).map(uc => (
+                    <div key={uc.id} style={{ ...s.card, borderColor: uc.goal_achieved ? '#22c55e44' : colors.border, cursor: 'default' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: uc.goal_achieved ? '#22c55e' : colors.border, borderRadius: '20px 20px 0 0' }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 28 }}>{uc.icon}</span>
+                        <div>
+                          <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: colors.textMuted }}>{uc.name}</div>
+                          <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2 }}>
+                            {uc.goal_achieved ? '🏆 Goal achieved' : '🌱 Closed'} · {new Date(uc.closed_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      {uc.description && <div style={{ fontSize: 12, color: colors.textDim, marginBottom: 8 }}>{uc.description}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           </>
         )}
       </div>
@@ -1158,9 +1216,34 @@ export default function Dashboard() {
             setUsecases(prev => prev.map(uc => uc.id === updated.id ? updated : uc))
             setEditingOrbit(null)
           }}
-          onDeleted={(deletedId) => {
-            setUsecases(prev => prev.filter(uc => uc.id !== deletedId))
+          onDeleted={() => {
+            setEditingOrbit(null)
+            fetchUsecases()
           }}
+          onRequestClose={() => {
+            const orbit = editingOrbit
+            setEditingOrbit(null)
+            setClosingOrbit(orbit)
+          }}
+        />
+      )}
+
+      {closingOrbit && (
+        <CloseOrbit
+          orbit={closingOrbit}
+          userId={user.id}
+          onClosed={(orbitId, achieved) => {
+            setUsecases(prev => prev.map(uc => uc.id === orbitId
+              ? { ...uc, closed_at: new Date().toISOString(), goal_achieved: achieved }
+              : uc
+            ))
+            setClosingOrbit(null)
+          }}
+          onExtend={(orbitId, newDate) => {
+            setUsecases(prev => prev.map(uc => uc.id === orbitId ? { ...uc, end_date: newDate } : uc))
+            setClosingOrbit(null)
+          }}
+          onCancel={() => setClosingOrbit(null)}
         />
       )}
 

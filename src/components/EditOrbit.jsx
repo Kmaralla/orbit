@@ -10,7 +10,7 @@ const VALUE_TYPES = [
   { key: 'text', label: 'Text', icon: '📝' },
 ]
 
-export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted }) {
+export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted, onRequestClose }) {
   const { colors } = useTheme()
   const [tab, setTab] = useState('details') // 'details' or 'checklist'
 
@@ -18,6 +18,7 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted }) {
   const [name, setName] = useState(orbit.name)
   const [description, setDescription] = useState(orbit.description || '')
   const [icon, setIcon] = useState(orbit.icon)
+  const [endDate, setEndDate] = useState(orbit.end_date || '')
 
   // Checklist items
   const [items, setItems] = useState([])
@@ -46,7 +47,7 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted }) {
     setSaving(true)
     const { data, error } = await supabase
       .from('usecases')
-      .update({ name, description, icon })
+      .update({ name, description, icon, end_date: endDate || null })
       .eq('id', orbit.id)
       .select()
       .single()
@@ -377,9 +378,44 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted }) {
                 ))}
               </div>
 
-              <button style={s.dangerBtn} onClick={deleteOrbit}>
-                🗑️ Delete this orbit
-              </button>
+              {/* End date — optional for short-term goals */}
+              <label style={s.label}>Goal end date <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(optional)</span></label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  style={{ ...s.input, marginBottom: 0, flex: 1 }}
+                  onFocus={e => e.target.style.borderColor = colors.accent}
+                  onBlur={e => e.target.style.borderColor = colors.border}
+                />
+                {endDate && (
+                  <button
+                    onClick={() => setEndDate('')}
+                    style={{ background: 'none', border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px', color: colors.textDim, fontSize: 12, cursor: 'pointer' }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {endDate && (
+                <div style={{ fontSize: 12, color: colors.textDim, marginTop: -10, marginBottom: 16 }}>
+                  Check-ins available until {endDate}. You'll be prompted to close or extend after this date.
+                </div>
+              )}
+
+              <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 16, marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button style={{ ...s.dangerBtn, marginTop: 0 }} onClick={deleteOrbit}>
+                  🗑️ Delete orbit
+                </button>
+                <button
+                  style={{ ...s.dangerBtn, marginTop: 0, borderColor: '#f59e0b44', color: '#f59e0b' }}
+                  onClick={() => { onClose(); onRequestClose?.() }}
+                >
+                  🏁 Close orbit
+                </button>
+              </div>
             </>
           ) : (
             <>

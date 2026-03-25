@@ -9,6 +9,7 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
   const [icon, setIcon] = useState('🎯')
   const [notifyEmail, setNotifyEmail] = useState('')
   const [notifyTime, setNotifyTime] = useState('09:00')
+  const [endDate, setEndDate] = useState('')
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
@@ -21,6 +22,7 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
       icon,
       notify_email: notifyEmail.trim() || null,
       notify_time: notifyEmail.trim() ? notifyTime : null,
+      end_date: endDate || null,
     }).select().single()
     if (data) onCreated(data)
     setSaving(false)
@@ -60,6 +62,20 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
             <button key={ic} style={{ ...s.iconBtn, borderColor: icon === ic ? colors.accent : colors.border, background: icon === ic ? colors.accent + '22' : colors.bgInput }}
               onClick={() => setIcon(ic)}>{ic}</button>
           ))}
+        </div>
+
+        <div style={s.section}>
+          <div style={s.sectionLabel}>🏁 Goal end date <span style={{ fontSize: 11, fontWeight: 400, color: colors.textDim }}>(optional — for short-term goals)</span></div>
+          <input
+            style={{ ...s.input, marginBottom: 0 }}
+            type="date"
+            value={endDate}
+            onChange={e => setEndDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0]}
+            onFocus={e => e.target.style.borderColor = colors.accent}
+            onBlur={e => e.target.style.borderColor = colors.border}
+          />
+          {endDate && <div style={{ fontSize: 11, color: colors.textDim, marginTop: 6 }}>You'll be prompted to close or extend after {endDate}</div>}
         </div>
 
         <div style={s.section}>
