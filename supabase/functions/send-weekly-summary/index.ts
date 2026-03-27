@@ -1,6 +1,8 @@
-// Supabase Edge Function: Send Weekly AI Summary Email
-// Schedule: Run every Sunday at 6pm UTC (0 18 * * 0)
-// Sends personalized AI-generated weekly summary to users
+// Supabase Edge Function: Weekly Summary Email
+// Schedule: Every Monday 8am UTC  →  0 8 * * 1
+//
+// Test single user:  GET /send-weekly-summary?email=user@example.com
+// Send to all:       GET /send-weekly-summary  (no param)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -9,413 +11,431 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface Usecase {
-  id: string
-  name: string
-  icon: string
-  user_id: string
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+function computeOrbitStats(orbit: any, items: any[], entries: any[], weekStart: string) {
+  const orbitItems = items.filter(i => i.usecase_id === orbit.id)
+  if (!orbitItems.length) return null
+
+  const itemStats = orbitItems.map(item => {
+    const itemEntries = entries.filter(e => e.checklist_item_id === item.id)
+    const doneEntries = itemEntries.filter(e => e.value && e.value !== '' && e.value !== 'false')
+    const daysCompleted = doneEntries.length
+
+    const sortedDates = itemEntries.map(e => e.date).sort().reverse()
+    const lastDate = sortedDates[0]
+    const today = new Date().toISOString().split('T')[0]
+    const daysSinceLast = lastDate
+      ? Math.floor((new Date(today).getTime() - new Date(lastDate).getTime()) / 86400000)
+      : 99
+
+    // For score/number: average value
+    let avgValue: number | null = null
+    if (item.value_type === 'score' || item.value_type === 'number') {
+      const nums = doneEntries.map(e => Number(e.value)).filter(n => !isNaN(n) && n > 0)
+      avgValue = nums.length > 0 ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : null
+    }
+
+    return { label: item.label, value_type: item.value_type, daysCompleted, daysSinceLast, avgValue }
+  })
+
+  const totalPossible = orbitItems.length * 7
+  const totalDone = itemStats.reduce((s, i) => s + i.daysCompleted, 0)
+  const completionPct = totalPossible > 0 ? Math.round((totalDone / totalPossible) * 100) : 0
+  const daysActive = new Set(
+    entries.filter(e => orbitItems.some(i => i.id === e.checklist_item_id)).map(e => e.date)
+  ).size
+
+  const zone: 'win' | 'watch' | 'focus' =
+    completionPct >= 65 ? 'win' : completionPct >= 35 ? 'watch' : 'focus'
+
+  return { orbit, completionPct, daysActive, itemStats, zone }
 }
 
-interface ChecklistItem {
-  id: string
-  usecase_id: string
-  label: string
-  value_type: string
-  frequency: string
-}
+// ── Claude ────────────────────────────────────────────────────────────────────
 
-interface Entry {
-  checklist_item_id: string
-  date: string
-  value: string
-}
+async function getInsights(
+  userName: string,
+  orbitStats: ReturnType<typeof computeOrbitStats>[],
+  totalDaysActive: number,
+  isNewUser: boolean,
+  anthropicKey: string
+) {
+  const validStats = orbitStats.filter(Boolean) as NonNullable<ReturnType<typeof computeOrbitStats>>[]
 
-interface UserData {
-  email: string
-  orbits: {
-    name: string
-    icon: string
-    items: { label: string; value_type: string; entries: { date: string; value: string }[] }[]
-  }[]
-}
-
-async function getClaudeAnalysis(userData: UserData, anthropicKey: string): Promise<{
-  greeting: string
-  orbitSummaries: { name: string; icon: string; trend: string; wins: string[]; focusArea: string }[]
-  weeklyMotto: string
-}> {
-  // Build summary for Claude
-  const orbitSummaries = userData.orbits.map(orbit => {
-    const itemSummaries = orbit.items.map(item => {
-      const completedCount = item.entries.filter(e =>
-        e.value && e.value !== '' && e.value !== 'false'
-      ).length
-
-      if (item.value_type === 'checkbox') {
-        return `  - ${item.label}: completed ${completedCount}/7 days`
-      } else if (item.value_type === 'score') {
-        const scores = item.entries.map(e => Number(e.value)).filter(n => !isNaN(n) && n > 0)
-        const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'no data'
-        return `  - ${item.label}: avg score ${avg}/10 (${scores.length} entries)`
-      } else if (item.value_type === 'number') {
-        const nums = item.entries.map(e => Number(e.value)).filter(n => !isNaN(n))
-        const total = nums.reduce((a, b) => a + b, 0)
-        return `  - ${item.label}: total ${total} (${nums.length} entries)`
-      } else {
-        return `  - ${item.label}: ${item.entries.length} text entries`
-      }
+  const dataLines = validStats.map(s => {
+    const items = s.itemStats.map(i => {
+      const extra = i.avgValue !== null ? `, avg ${i.avgValue}` : ''
+      const last = i.daysSinceLast === 0 ? 'today' : i.daysSinceLast === 99 ? 'never this week' : `${i.daysSinceLast}d ago`
+      return `    • ${i.label}: ${i.daysCompleted}/7 days${extra}, last: ${last}`
     }).join('\n')
-
-    return `${orbit.icon} ${orbit.name}:\n${itemSummaries}`
+    return `${s.orbit.icon} ${s.orbit.name} — ${s.completionPct}% (${s.daysActive}/7 days active)\n${items}`
   }).join('\n\n')
+
+  const segment = isNewUser
+    ? 'NEW_USER (just started this week — low data is totally normal, focus on encouragement and momentum)'
+    : totalDaysActive === 0
+      ? 'DORMANT (has orbits but no check-ins at all this week — gentle nudge, no guilt)'
+      : totalDaysActive >= 5
+        ? 'ACTIVE_STRONG (checked in 5-7 days — acknowledge it, push them a little further)'
+        : 'ACTIVE_PARTIAL (checked in 2-4 days — honest about the gap, warm about what they did do)'
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01'
+      'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      system: `You are a warm, encouraging life coach creating a weekly summary email for someone tracking their life goals.
+      max_tokens: 500,
+      system: `You write weekly progress emails for ${userName}, a user of Orbit (a personal habit/life-tracking app).
 
-Write in a warm, personal tone - like a supportive friend who genuinely cares about their progress.
+Tone: warm and direct, like a friend who actually pays attention — not a bot, not a cheerleader, not corporate. Be honest. Reference specific numbers or orbit names when you can. Keep each field SHORT.
 
-Return ONLY valid JSON with:
+User segment: ${segment}
+
+Return ONLY valid JSON — no markdown, no extra text:
 {
-  "greeting": "A warm 1-2 sentence personalized greeting acknowledging their week",
-  "orbitSummaries": [
-    {
-      "name": "orbit name",
-      "icon": "emoji",
-      "trend": "1-2 sentence warm summary of how they did this week",
-      "wins": ["specific win 1", "specific win 2"],
-      "focusArea": "one gentle suggestion for next week"
-    }
-  ],
-  "weeklyMotto": "An inspiring 1-sentence motto for the coming week"
+  "subject": "email subject, all lowercase, no emoji, max 8 words, sounds like a message from a real person not a system notification",
+  "openingLine": "2 sentences max. Direct observation about their week. Name their best or most active orbit if possible.",
+  "winLine": "1 sentence. Specific praise. Call out actual numbers or orbit names.",
+  "watchLine": "1 sentence. What slipped or what needs watching. Honest but not harsh.",
+  "focusAction": "1 specific thing to do this week. Concrete, not vague.",
+  "closingLine": "1 short sentence. Grounded motivation. No clichés like 'you got this' or 'keep it up'."
 }`,
       messages: [{
         role: 'user',
-        content: `Here's this user's check-in data for the past 7 days:\n\n${orbitSummaries}\n\nPlease create their weekly summary.`
-      }]
-    })
+        content: validStats.length
+          ? `Check-in data for the past 7 days:\n\n${dataLines}\n\nTotal days with any check-in: ${totalDaysActive}/7`
+          : `This user has ${orbitStats.length} orbit${orbitStats.length !== 1 ? 's' : ''} but no check-ins recorded this week. They are ${isNewUser ? 'brand new' : 'returning but inactive'}.`,
+      }],
+    }),
   })
 
   const data = await response.json()
   const text = data.content?.find((b: any) => b.type === 'text')?.text || '{}'
-
   try {
-    const clean = text.replace(/```json|```/g, '').trim()
-    return JSON.parse(clean)
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
   } catch {
-    // Fallback if parsing fails
     return {
-      greeting: "Hey! Another week of tracking your progress - that's commitment! 🌟",
-      orbitSummaries: userData.orbits.map(o => ({
-        name: o.name,
-        icon: o.icon,
-        trend: "You showed up this week, and that's what matters most.",
-        wins: ["Consistency in tracking", "Taking time for self-reflection"],
-        focusArea: "Keep building on your momentum!"
-      })),
-      weeklyMotto: "Small steps, big changes. You've got this! 💪"
+      subject: 'your week with orbit',
+      openingLine: 'Another week in orbit. Here\'s how it went.',
+      winLine: 'You kept your tracking alive — that\'s not nothing.',
+      watchLine: 'Some orbits need more consistent attention.',
+      focusAction: 'Pick one orbit and check in every single day this week.',
+      closingLine: 'What gets tracked, gets better.',
     }
   }
 }
 
-function buildEmailHtml(analysis: Awaited<ReturnType<typeof getClaudeAnalysis>>, appUrl: string): string {
-  const orbitSections = analysis.orbitSummaries.map(orbit => `
-    <tr>
-      <td style="padding: 20px 0; border-bottom: 1px solid #1a1a2e;">
-        <div style="font-size: 24px; margin-bottom: 8px;">${orbit.icon}</div>
-        <div style="font-size: 18px; font-weight: 700; color: #e8e4f0; margin-bottom: 8px;">
-          ${orbit.name}
-        </div>
-        <div style="font-size: 14px; color: #b8b4c8; line-height: 1.6; margin-bottom: 12px;">
-          ${orbit.trend}
-        </div>
-        <div style="margin-bottom: 12px;">
-          ${orbit.wins.map(win => `
-            <div style="display: flex; align-items: center; margin-bottom: 6px;">
-              <span style="color: #22c55e; margin-right: 8px;">✓</span>
-              <span style="color: #a8a4b8; font-size: 13px;">${win}</span>
-            </div>
-          `).join('')}
-        </div>
-        <div style="background: #6c63ff22; border-left: 3px solid #6c63ff; padding: 10px 14px; border-radius: 0 8px 8px 0;">
-          <span style="color: #8b85ff; font-size: 12px; font-weight: 600;">FOCUS FOR NEXT WEEK:</span>
-          <div style="color: #c8c4d8; font-size: 13px; margin-top: 4px;">${orbit.focusArea}</div>
-        </div>
-      </td>
-    </tr>
-  `).join('')
+// ── Email HTML ─────────────────────────────────────────────────────────────────
 
-  return `
-<!DOCTYPE html>
+function buildEmail(insights: any, orbitStats: any[], totalDaysActive: number, appUrl: string): string {
+  const ZONES: Record<string, { bg: string; border: string; color: string; tag: string }> = {
+    win:   { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d', tag: '● On track' },
+    watch: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', tag: '◐ Keep it up' },
+    focus: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', tag: '○ Needs attention' },
+  }
+
+  const validStats = orbitStats.filter(Boolean)
+  const progressPct = Math.round((totalDaysActive / 7) * 100)
+
+  const orbitCards = validStats.map((s: any) => {
+    const z = ZONES[s.zone]
+    const itemRows = s.itemStats.slice(0, 4).map((item: any) => {
+      // 7 dots showing each day
+      const dots = Array.from({ length: 7 }, (_, d) =>
+        `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d < item.daysCompleted ? '#6c63ff' : '#e5e7eb'};margin-right:2px;"></span>`
+      ).join('')
+      const valueNote = item.avgValue !== null ? ` · avg ${item.avgValue}` : ''
+      return `<tr>
+        <td style="padding:4px 0;font-size:12px;color:#374151;width:55%;">${item.label}${valueNote}</td>
+        <td style="padding:4px 0;text-align:right;">${dots}</td>
+      </tr>`
+    }).join('')
+
+    return `<div style="background:${z.bg};border:1px solid ${z.border};border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+        <tr>
+          <td style="font-size:14px;font-weight:700;color:#111827;">${s.orbit.icon} ${s.orbit.name}</td>
+          <td style="text-align:right;font-size:11px;font-weight:700;color:${z.color};">${z.tag}</td>
+        </tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0">${itemRows}</table>
+    </div>`
+  }).join('')
+
+  const progressBar = totalDaysActive > 0
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:4px;">
+        <tr>
+          <td style="background:#f3f4f6;border-radius:6px;height:5px;">
+            <div style="background:#6c63ff;border-radius:6px;height:5px;width:${progressPct}%;"></div>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:11px;color:#9ca3af;margin:0 0 16px 0;">${totalDaysActive} of 7 days active this week</p>`
+    : `<p style="font-size:13px;color:#9ca3af;margin:0 0 16px 0;">No check-ins recorded this week</p>`
+
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
 </head>
-<body style="margin: 0; padding: 0; background-color: #080810; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #080810; padding: 32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px;">
-          <!-- Header -->
-          <tr>
-            <td style="padding-bottom: 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td>
-                    <span style="font-size: 22px; font-weight: 700; color: #e8e4f0;">
-                      <span style="color: #6c63ff;">●</span> Orbit
-                    </span>
-                  </td>
-                  <td style="text-align: right; color: #4a4870; font-size: 13px;">
-                    Weekly Summary
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:36px 20px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
 
-          <!-- Greeting -->
-          <tr>
-            <td style="padding-bottom: 24px;">
-              <h1 style="color: #e8e4f0; font-size: 22px; font-weight: 600; margin: 0 0 12px 0;">
-                Your Week in Review 📊
-              </h1>
-              <p style="color: #8b87a8; font-size: 15px; margin: 0; line-height: 1.6;">
-                ${analysis.greeting}
-              </p>
-            </td>
-          </tr>
+  <!-- Logo -->
+  <tr><td style="padding-bottom:24px;">
+    <span style="font-size:16px;font-weight:700;color:#1a1a2e;letter-spacing:-0.3px;">
+      <span style="color:#6c63ff;">●</span> Orbit
+    </span>
+    <span style="font-size:11px;color:#9ca3af;margin-left:8px;text-transform:uppercase;letter-spacing:1px;">weekly</span>
+  </td></tr>
 
-          <!-- Orbit Summaries -->
-          <tr>
-            <td style="background-color: #0d0d1a; border-radius: 16px; border: 1px solid #1a1a2e; padding: 8px 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                ${orbitSections}
-              </table>
-            </td>
-          </tr>
+  <!-- Opening -->
+  <tr><td style="padding-bottom:16px;">
+    <p style="font-size:16px;color:#111827;margin:0 0 12px 0;line-height:1.65;">${insights.openingLine}</p>
+    ${progressBar}
+  </td></tr>
 
-          <!-- Weekly Motto -->
-          <tr>
-            <td style="padding-top: 24px; text-align: center;">
-              <div style="background: linear-gradient(135deg, #6c63ff22 0%, #6c63ff11 100%); border: 1px solid #6c63ff44; border-radius: 12px; padding: 20px;">
-                <div style="color: #6c63ff; font-size: 12px; font-weight: 600; margin-bottom: 8px;">
-                  YOUR MOTTO FOR THE WEEK
-                </div>
-                <div style="color: #e8e4f0; font-size: 16px; font-weight: 500; line-height: 1.5;">
-                  "${analysis.weeklyMotto}"
-                </div>
-              </div>
-            </td>
-          </tr>
+  <!-- Orbit cards -->
+  ${validStats.length ? `<tr><td style="padding-bottom:20px;border-top:1px solid #f3f4f6;padding-top:16px;">${orbitCards}</td></tr>` : ''}
 
-          <!-- CTA -->
-          <tr>
-            <td style="padding-top: 24px; text-align: center;">
-              <a href="${appUrl}/dashboard"
-                 style="display: inline-block; background: linear-gradient(135deg, #6c63ff 0%, #5b54e0 100%);
-                        color: #fff; padding: 14px 28px; border-radius: 10px; text-decoration: none;
-                        font-size: 14px; font-weight: 600;">
-                Start Your New Week →
-              </a>
-            </td>
-          </tr>
+  <!-- Win + Watch -->
+  <tr><td style="padding-bottom:20px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="48%" valign="top" style="background:#f0fdf4;border-radius:10px;padding:12px 14px;">
+          <div style="font-size:10px;font-weight:700;color:#15803d;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:5px;">WIN</div>
+          <div style="font-size:13px;color:#166534;line-height:1.55;">${insights.winLine}</div>
+        </td>
+        <td width="4%"></td>
+        <td width="48%" valign="top" style="background:#fff7ed;border-radius:10px;padding:12px 14px;">
+          <div style="font-size:10px;font-weight:700;color:#c2410c;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:5px;">WATCH</div>
+          <div style="font-size:13px;color:#9a3412;line-height:1.55;">${insights.watchLine}</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-          <!-- Footer -->
+  <!-- Focus this week -->
+  <tr><td style="padding-bottom:24px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="4" style="background:#6c63ff;border-radius:2px;"></td>
+        <td style="padding:12px 14px;background:#f5f3ff;border-radius:0 10px 10px 0;">
+          <div style="font-size:10px;font-weight:700;color:#6c63ff;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">FOCUS THIS WEEK</div>
+          <div style="font-size:13px;color:#3730a3;line-height:1.55;">${insights.focusAction}</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- CTA -->
+  <tr><td style="padding-bottom:28px;">
+    <a href="${appUrl}/dashboard"
+       style="display:inline-block;background:#6c63ff;color:#ffffff;padding:12px 24px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;">
+      Check in today →
+    </a>
+  </td></tr>
+
+  <!-- New features -->
+  <tr><td style="padding-bottom:28px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e5e7eb;border-radius:12px;padding:16px 18px;">
+      <tr><td style="padding-bottom:12px;">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#6c63ff;">What's new in Orbit</span>
+      </td></tr>
+      <tr><td style="padding-bottom:10px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
-            <td style="padding-top: 32px; text-align: center;">
-              <p style="color: #3a3858; font-size: 11px; margin: 0;">
-                You're receiving this because you enabled weekly summaries.<br>
-                <a href="${appUrl}/dashboard" style="color: #4a4870; text-decoration: none;">Manage notification settings</a>
-              </p>
+            <td width="28" valign="top" style="font-size:16px;padding-top:1px;">🔑</td>
+            <td valign="top">
+              <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:2px;">Sign in with Google</div>
+              <div style="font-size:12px;color:#6b7280;line-height:1.5;">Can't remember your password on a new device? Just hit "Continue with Google" — one click, you're in.</div>
             </td>
           </tr>
         </table>
-      </td>
-    </tr>
-  </table>
+      </td></tr>
+      <tr><td style="padding-bottom:10px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="28" valign="top" style="font-size:16px;padding-top:1px;">📊</td>
+            <td valign="top">
+              <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:2px;">Overall Stats</div>
+              <div style="font-size:12px;color:#6b7280;line-height:1.5;">See streaks, completion trends and charts across all your orbits in one place.</div>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding-bottom:10px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="28" valign="top" style="font-size:16px;padding-top:1px;">🤖</td>
+            <td valign="top">
+              <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:2px;">Orbit AI Assistant</div>
+              <div style="font-size:12px;color:#6b7280;line-height:1.5;">Ask anything about your progress, get habit advice, or have AI build a brand new orbit for you from scratch.</div>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="28" valign="top" style="font-size:16px;padding-top:1px;">🗓️</td>
+            <td valign="top">
+              <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:2px;">Plan My Day</div>
+              <div style="font-size:12px;color:#6b7280;line-height:1.5;">Too many tasks across orbits? Plan My Day picks your top priorities for today so you start focused, not overwhelmed.</div>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Sign off -->
+  <tr><td style="border-top:1px solid #f3f4f6;padding-top:16px;">
+    <p style="font-size:13px;color:#6b7280;font-style:italic;margin:0 0 8px 0;">${insights.closingLine}</p>
+    <p style="font-size:11px;color:#d1d5db;margin:0;">— Karthiek from Orbit</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
 </body>
-</html>
-  `.trim()
+</html>`
 }
 
+// ── Handler ───────────────────────────────────────────────────────────────────
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY')
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')!
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
     const appUrl = Deno.env.get('APP_URL') || 'https://www.orbityours.com'
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase environment variables')
-    }
-    if (!resendApiKey) {
-      throw new Error('Missing RESEND_API_KEY')
-    }
-    if (!anthropicApiKey) {
-      throw new Error('Missing ANTHROPIC_API_KEY')
-    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Check for test mode
-    let forceAll = false
-    try {
-      const body = await req.json()
-      if (body?.test === true) forceAll = true
-    } catch {
-      // No body
-    }
+    // ?email=xxx → test mode (single user only)
+    const url = new URL(req.url)
+    const targetEmail = url.searchParams.get('email')
 
-    // Log start
-    await supabase.from('function_logs').insert({
-      function_name: 'send-weekly-summary',
-      status: 'started',
-      details: { testMode: forceAll, timestamp: new Date().toISOString() }
-    })
+    // Get users from auth
+    const { data: { users }, error: usersErr } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    if (usersErr) throw usersErr
 
-    // Get all usecases with email reminders (these users want notifications)
-    const { data: usecases, error: fetchError } = await supabase
-      .from('usecases')
-      .select('id, name, icon, user_id, notify_email')
-      .not('notify_email', 'is', null)
+    const targets = targetEmail
+      ? users.filter(u => u.email?.toLowerCase() === targetEmail.toLowerCase())
+      : users.filter(u => u.email)
 
-    if (fetchError) throw fetchError
-
-    if (!usecases || usecases.length === 0) {
+    if (!targets.length) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No users with email reminders', sent: 0 }),
+        JSON.stringify({ message: targetEmail ? `No user found: ${targetEmail}` : 'No users' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Group by user email
-    const userOrbits: Record<string, { email: string; orbits: Usecase[] }> = {}
-    for (const uc of usecases) {
-      if (!userOrbits[uc.user_id]) {
-        userOrbits[uc.user_id] = { email: uc.notify_email, orbits: [] }
-      }
-      userOrbits[uc.user_id].orbits.push(uc)
-    }
+    const today = new Date().toISOString().split('T')[0]
+    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const weekStart = sevenDaysAgo.toISOString().split('T')[0]
 
-    // Get all orbit IDs
-    const allOrbitIds = usecases.map(uc => uc.id)
+    const results: any[] = []
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-    // Get checklist items
-    const { data: items } = await supabase
-      .from('checklist_items')
-      .select('*')
-      .in('usecase_id', allOrbitIds)
+    for (const user of targets) {
+      const email = user.email!
+      const userName = user.user_metadata?.full_name?.split(' ')[0]
+        || user.user_metadata?.name?.split(' ')[0]
+        || email.split('@')[0]
 
-    // Get entries from last 7 days
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    const { data: entries } = await supabase
-      .from('checkin_entries')
-      .select('checklist_item_id, date, value')
-      .in('checklist_item_id', items?.map(i => i.id) || [])
-      .gte('date', sevenDaysAgo.toISOString().split('T')[0])
+      // Fetch active orbits
+      const { data: orbits } = await supabase
+        .from('usecases')
+        .select('id, name, icon, created_at')
+        .eq('user_id', user.id)
+        .is('closed_at', null)
 
-    const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
-    for (const userId of Object.keys(userOrbits)) {
-      const userData = userOrbits[userId]
-      const email = userData.email
-
-      // Build user's data structure
-      const userDataForAI: UserData = {
-        email,
-        orbits: userData.orbits.map(orbit => {
-          const orbitItems = items?.filter(i => i.usecase_id === orbit.id) || []
-          return {
-            name: orbit.name,
-            icon: orbit.icon,
-            items: orbitItems.map(item => ({
-              label: item.label,
-              value_type: item.value_type,
-              entries: entries
-                ?.filter(e => e.checklist_item_id === item.id)
-                .map(e => ({ date: e.date, value: e.value })) || []
-            }))
-          }
-        })
+      if (!orbits?.length) {
+        results.push({ email, status: 'skipped', reason: 'no orbits yet' })
+        continue
       }
 
-      try {
-        // Get AI analysis
-        const analysis = await getClaudeAnalysis(userDataForAI, anthropicApiKey)
+      const orbitIds = orbits.map(o => o.id)
 
-        // Build and send email
-        const emailHtml = buildEmailHtml(analysis, appUrl)
+      const { data: items } = await supabase
+        .from('checklist_items')
+        .select('id, usecase_id, label, value_type')
+        .in('usecase_id', orbitIds)
 
-        // Rate limit: wait between API calls
-        await sleep(2000)
+      const itemIds = (items || []).map(i => i.id)
 
-        const emailResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: 'Orbit <weekly@orbityours.com>',
-            to: email,
-            subject: `📊 Your Week in Review — ${userData.orbits.length} orbit${userData.orbits.length > 1 ? 's' : ''}`,
-            html: emailHtml,
-          }),
-        })
+      const { data: entries } = itemIds.length
+        ? await supabase
+            .from('checkin_entries')
+            .select('checklist_item_id, date, value')
+            .in('checklist_item_id', itemIds)
+            .gte('date', weekStart)
+        : { data: [] }
 
-        const emailResult = await emailResponse.json()
+      const isNewUser = orbits.some(o => new Date(o.created_at) > sevenDaysAgo)
+      const totalDaysActive = new Set((entries || []).map((e: any) => e.date)).size
 
-        if (!emailResponse.ok) {
-          console.error(`Failed to send to ${email}:`, emailResult)
-          results.push({ email, status: 'failed', orbitCount: userData.orbits.length, error: emailResult.message })
-        } else {
-          console.log(`✓ Weekly summary sent to ${email}`)
-          results.push({ email, status: 'sent', orbitCount: userData.orbits.length })
-        }
-      } catch (err: any) {
-        console.error(`Error processing ${email}:`, err.message)
-        results.push({ email, status: 'error', orbitCount: userData.orbits.length, error: err.message })
+      const orbitStats = orbits.map(orbit =>
+        computeOrbitStats(orbit, items || [], entries || [], weekStart)
+      )
+
+      // Claude call
+      await sleep(300)
+      const insights = await getInsights(userName, orbitStats, totalDaysActive, isNewUser, anthropicKey)
+
+      const emailHtml = buildEmail(insights, orbitStats, totalDaysActive, appUrl)
+
+      await sleep(500)
+
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Karthiek from Orbit <weekly@orbityours.com>',
+          to: email,
+          subject: insights.subject,
+          html: emailHtml,
+        }),
+      })
+
+      const result = await resp.json()
+      if (resp.ok) {
+        console.log(`✓ ${email} — "${insights.subject}"`)
+        results.push({ email, status: 'sent', subject: insights.subject, daysActive: totalDaysActive })
+      } else {
+        console.error(`✗ ${email}`, result)
+        results.push({ email, status: 'failed', error: result.message })
       }
 
-      // Rate limit between users
-      await sleep(10000)
+      // Rate limiting: only throttle on bulk sends
+      if (!targetEmail && targets.indexOf(user) < targets.length - 1) await sleep(4000)
     }
 
     const sent = results.filter(r => r.status === 'sent').length
-    const failed = results.filter(r => r.status !== 'sent').length
-
-    // Log completion
-    await supabase.from('function_logs').insert({
-      function_name: 'send-weekly-summary',
-      status: 'success',
-      details: { testMode: forceAll, sent, failed, totalUsers: Object.keys(userOrbits).length }
-    })
+    const skipped = results.filter(r => r.status === 'skipped').length
+    const failed = results.filter(r => r.status === 'failed').length
 
     return new Response(
-      JSON.stringify({ success: true, sent, failed, results }),
+      JSON.stringify({ success: true, sent, skipped, failed, results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (error) {
-    console.error('Edge function error:', error)
+  } catch (err) {
+    console.error(err)
     return new Response(
-      JSON.stringify({ success: false, error: String(error) }),
+      JSON.stringify({ success: false, error: String(err) }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
