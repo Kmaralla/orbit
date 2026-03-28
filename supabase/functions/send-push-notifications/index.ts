@@ -158,39 +158,37 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Filter subscriptions where current local time matches user's configured notify hour
-    // Fall back to 8pm (20:00) for users without a configured time
-    const subscriptionsToNotify = forceAll
+    // Determine per-user: are they at their regular notify time? at the 9pm streak window?
+    const userRegularWindow: Record<string, boolean> = {}
+    const userStreakWindow: Record<string, boolean> = {}
+
+    for (const sub of allSubscriptions) {
+      const config = userNotifyConfig[sub.user_id]
+      const tz = config?.timezone || sub.timezone || 'UTC'
+      const notifyHour = config?.notifyHour ?? 20
+      const currentHour = getHourInTimezone(tz)
+      if (currentHour === notifyHour) userRegularWindow[sub.user_id] = true
+      if (currentHour === 21) userStreakWindow[sub.user_id] = true  // 9pm streak protection window
+    }
+
+    // Candidate subscriptions: at regular time OR at 9pm
+    const candidateSubs = forceAll
       ? allSubscriptions
-      : allSubscriptions.filter(sub => {
-          const config = userNotifyConfig[sub.user_id]
-          const tz = config?.timezone || sub.timezone || 'UTC'
-          const notifyHour = config?.notifyHour ?? 20
-          const currentHour = getHourInTimezone(tz)
-          console.log(`User ${sub.user_id} tz: ${tz}, notify at: ${notifyHour}h, current: ${currentHour}h`)
-          return currentHour === notifyHour
-        })
+      : allSubscriptions.filter(sub => userRegularWindow[sub.user_id] || userStreakWindow[sub.user_id])
 
-    console.log(`Total subscriptions: ${allSubscriptions.length}`)
-    console.log(`Subscriptions matching notify time: ${subscriptionsToNotify.length}`)
+    console.log(`Total subscriptions: ${allSubscriptions.length}, candidates: ${candidateSubs.length}`)
 
-    if (subscriptionsToNotify.length === 0) {
+    if (candidateSubs.length === 0) {
       return new Response(
-        JSON.stringify({
-          message: 'No users at their configured notification time right now',
-          totalSubscriptions: allSubscriptions.length,
-          sent: 0
-        }),
+        JSON.stringify({ message: 'No users at their notification window right now', sent: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Group subscriptions by user_id
-    const userSubscriptions: Record<string, typeof subscriptionsToNotify> = {}
-    for (const sub of subscriptionsToNotify) {
-      if (!userSubscriptions[sub.user_id]) {
-        userSubscriptions[sub.user_id] = []
-      }
+    // Group candidate subscriptions by user_id
+    const userSubscriptions: Record<string, typeof candidateSubs> = {}
+    for (const sub of candidateSubs) {
+      if (!userSubscriptions[sub.user_id]) userSubscriptions[sub.user_id] = []
       userSubscriptions[sub.user_id].push(sub)
     }
 
@@ -222,12 +220,14 @@ Deno.serve(async (req) => {
       .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
 
     // Build user streak data
-    const userStreakInfo: Record<string, { streaksAtRisk: number; totalOrbits: number; topAtRiskItem?: string }> = {}
+    const userStreakInfo: Record<string, { streaksAtRisk: number; bestStreakCount: number; topAtRiskItem?: string; topAtRiskCount: number }> = {}
 
     for (const userId of userIds) {
       const orbits = userOrbits?.filter(o => o.user_id === userId) || []
       let streaksAtRisk = 0
+      let bestStreakCount = 0
       let topAtRiskItem: string | undefined
+      let topAtRiskCount = 0
 
       for (const orbit of orbits) {
         const items = checklistItems?.filter(i => i.usecase_id === orbit.id) || []
@@ -237,20 +237,18 @@ Deno.serve(async (req) => {
             .map(e => ({ date: e.date, value: e.value })) || []
 
           const streak = calculateStreak(entries)
+          if (streak.current > bestStreakCount) bestStreakCount = streak.current
           if (streak.atRisk) {
             streaksAtRisk++
-            if (!topAtRiskItem && streak.current >= 3) {
-              topAtRiskItem = `${orbit.icon} ${item.label} (${streak.current} day streak!)`
+            if (streak.current >= 3 && streak.current > topAtRiskCount) {
+              topAtRiskItem = `${orbit.icon} ${item.label}`
+              topAtRiskCount = streak.current
             }
           }
         }
       }
 
-      userStreakInfo[userId] = {
-        streaksAtRisk,
-        totalOrbits: orbits.length,
-        topAtRiskItem
-      }
+      userStreakInfo[userId] = { streaksAtRisk, bestStreakCount, topAtRiskItem, topAtRiskCount }
     }
 
     const results: { userId: string; device: string; timezone: string; success: boolean; streaksAtRisk: number; error?: string }[] = []
@@ -259,18 +257,34 @@ Deno.serve(async (req) => {
       const subs = userSubscriptions[userId]
       const streakInfo = userStreakInfo[userId]
 
-      // Personalize notification based on streak status
-      let title = '🌟 Time to check in!'
-      let body = 'Your orbits are waiting for today\'s check-in'
+      // Determine message type: streak protection (9pm) takes priority over regular
+      const isStreakAlert = userStreakWindow[userId] && streakInfo.streaksAtRisk > 0 && streakInfo.topAtRiskCount >= 3
 
-      if (streakInfo.streaksAtRisk > 0) {
-        if (streakInfo.topAtRiskItem) {
-          title = '⚠️ Streak at risk!'
-          body = `Don't lose your streak: ${streakInfo.topAtRiskItem}`
-        } else {
-          title = '⚠️ Don\'t break your streak!'
-          body = `You have ${streakInfo.streaksAtRisk} streak${streakInfo.streaksAtRisk > 1 ? 's' : ''} at risk today`
-        }
+      // If user is ONLY in streak window but has no qualifying streak, skip them
+      if (!userRegularWindow[userId] && !isStreakAlert && !forceAll) {
+        console.log(`Skipping ${userId} — at 9pm but no meaningful streak at risk`)
+        continue
+      }
+
+      let title: string
+      let body: string
+
+      if (isStreakAlert) {
+        // Urgent streak protection message
+        title = `⚡ ${streakInfo.topAtRiskCount}-day streak ends tonight`
+        body = streakInfo.topAtRiskItem
+          ? `Check in before midnight — ${streakInfo.topAtRiskItem} is at risk`
+          : `You have ${streakInfo.streaksAtRisk} streak${streakInfo.streaksAtRisk > 1 ? 's' : ''} ending tonight`
+      } else if (streakInfo.streaksAtRisk > 0) {
+        // Regular time with streaks at risk
+        title = '⚠️ Streak at risk — check in!'
+        body = streakInfo.topAtRiskItem
+          ? `Don't lose: ${streakInfo.topAtRiskItem} (${streakInfo.topAtRiskCount} days)`
+          : `${streakInfo.streaksAtRisk} streak${streakInfo.streaksAtRisk > 1 ? 's' : ''} need your attention today`
+      } else {
+        // Regular daily reminder
+        title = '🌟 Time to check in!'
+        body = 'Your orbits are waiting for today\'s check-in'
       }
 
       const payload = JSON.stringify({

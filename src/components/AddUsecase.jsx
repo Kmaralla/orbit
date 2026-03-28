@@ -6,6 +6,7 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
   const { colors } = useTheme()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [goalStatement, setGoalStatement] = useState('')
   const [icon, setIcon] = useState('🎯')
   const [notifyEmail, setNotifyEmail] = useState('')
   const [notifyTime, setNotifyTime] = useState('09:00')
@@ -19,6 +20,7 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
       user_id: userId,
       name: name.trim(),
       description: description.trim(),
+      goal_statement: goalStatement.trim() || null,
       icon,
       notify_email: notifyEmail.trim() || null,
       notify_time: notifyEmail.trim() ? notifyTime : null,
@@ -55,6 +57,16 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
         <label style={s.label}>Description (optional)</label>
         <input style={s.input} placeholder="What are you tracking?" value={description} onChange={e => setDescription(e.target.value)}
           onFocus={e => e.target.style.borderColor = colors.accent} onBlur={e => e.target.style.borderColor = colors.border} />
+
+        <label style={s.label}>Goal <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: colors.textDim }}>(optional — helps AI prioritize better)</span></label>
+        <textarea
+          style={{ ...s.input, height: 72, resize: 'vertical', lineHeight: 1.5, marginBottom: 16 }}
+          placeholder="e.g. I want dad to stay active and manage his medications consistently so he avoids hospital visits"
+          value={goalStatement}
+          onChange={e => setGoalStatement(e.target.value)}
+          onFocus={e => e.target.style.borderColor = colors.accent}
+          onBlur={e => e.target.style.borderColor = colors.border}
+        />
 
         <label style={s.label}>Icon</label>
         <div style={s.iconGrid}>

@@ -17,6 +17,7 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted, onRequ
   // Orbit details
   const [name, setName] = useState(orbit.name)
   const [description, setDescription] = useState(orbit.description || '')
+  const [goalStatement, setGoalStatement] = useState(orbit.goal_statement || '')
   const [icon, setIcon] = useState(orbit.icon)
   const [endDate, setEndDate] = useState(orbit.end_date || '')
 
@@ -47,7 +48,7 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted, onRequ
     setSaving(true)
     const { data, error } = await supabase
       .from('usecases')
-      .update({ name, description, icon, end_date: endDate || null })
+      .update({ name, description, goal_statement: goalStatement.trim() || null, icon, end_date: endDate || null })
       .eq('id', orbit.id)
       .select()
       .single()
@@ -357,6 +358,16 @@ export default function EditOrbit({ orbit, onClose, onUpdated, onDeleted, onRequ
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 placeholder="What are you tracking?"
+                onFocus={e => e.target.style.borderColor = colors.accent}
+                onBlur={e => e.target.style.borderColor = colors.border}
+              />
+
+              <label style={s.label}>Goal <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: colors.textDim }}>(helps AI prioritize better)</span></label>
+              <textarea
+                style={{ ...s.input, height: 72, resize: 'vertical', lineHeight: 1.5 }}
+                value={goalStatement}
+                onChange={e => setGoalStatement(e.target.value)}
+                placeholder="e.g. I want dad to stay active and manage his medications so he avoids hospital visits"
                 onFocus={e => e.target.style.borderColor = colors.accent}
                 onBlur={e => e.target.style.borderColor = colors.border}
               />

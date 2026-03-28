@@ -7,6 +7,7 @@ export async function getBuildDayPlan(orbitsWithTasks, answers) {
     name: o.name,
     icon: o.icon,
     description: o.description || '',
+    goal: o.goal_statement || null,
     streakDays: o.streakDays,
     atRisk: o.atRisk,
     checkedTodayCount: o.checkedTodayCount,
@@ -37,6 +38,7 @@ RULES:
 - For deep (60+ min): can cover most tasks, encourage thoughtful score/text entries
 - Low energy: favor simple checkbox tasks, avoid text/score tasks requiring reflection
 - High energy: good time for score and text tasks that need real thought
+- Each orbit may have a "goal" field — use it to understand WHY this orbit matters and which tasks move the needle toward that goal. Prioritize tasks that directly serve the goal.
 - ALWAYS include at-risk streak tasks (atRisk: true) — these should almost never be skipped
 - If user named priority orbits, weight them significantly higher
 - For each orbit in the plan, select only the most impactful subset of tasks
