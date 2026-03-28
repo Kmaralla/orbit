@@ -13,6 +13,7 @@ import BuildDay from '../components/BuildDay'
 import OrbitChat from '../components/OrbitChat'
 import CloseOrbit from '../components/CloseOrbit'
 import ShareOrbit from '../components/ShareOrbit'
+import SideQuestPanel from '../components/SideQuestPanel'
 import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
@@ -631,25 +632,6 @@ export default function Dashboard() {
               </div>
             </button>
           )}
-          <button
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              background: colors.bgCard,
-              border: `1px solid ${colors.borderLight}`,
-              borderRadius: 14, padding: '12px 18px',
-              cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
-              transition: 'all 0.15s',
-            }}
-            onClick={() => navigate('/side-quests')}
-            onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = colors.borderLight}
-          >
-            <span style={{ fontSize: 22, flexShrink: 0 }}>☄️</span>
-            <div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.textMuted }}>Side Quests</div>
-              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>One-time tasks — errands, fix-its, to-dos</div>
-            </div>
-          </button>
           <button
             style={{
               display: 'flex', alignItems: 'center', gap: 12,
@@ -1297,6 +1279,7 @@ export default function Dashboard() {
         />
       )}
 
+      <SideQuestPanel />
       <OrbitChat orbits={usecases} stats={orbitStreaks} />
 
       <style>{`
