@@ -223,7 +223,7 @@ export default function SideQuestPanel() {
                   fontFamily: 'Nunito, sans-serif',
                   outline: 'none',
                 }}
-                placeholder="Add a task... (Enter)"
+                placeholder={isEmpty ? 'e.g. Search for a new house...' : 'Add a task... (Enter)'}
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -255,43 +255,50 @@ export default function SideQuestPanel() {
 
             {/* First-timer onboarding */}
             {isEmpty && (
-              <div style={{
-                background: `linear-gradient(135deg, ${colors.accent}0f, ${colors.accent}05)`,
-                border: `1px dashed ${colors.accent}44`,
-                borderRadius: 14,
-                padding: '20px 16px',
-                marginBottom: 16,
-                textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>☄️</div>
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 8 }}>
-                  Your side quest log
-                </div>
-                <div style={{ fontSize: 12, color: colors.textDim, lineHeight: 1.7 }}>
-                  For one-time tasks that don't fit your daily orbits.
-                  <br />
-                  <strong style={{ color: colors.textMuted }}>Examples:</strong>
-                </div>
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {[
-                    ['🛒', 'Buy a new laptop charger'],
-                    ['🔋', 'Fix smoke alarm battery'],
-                    ['📞', 'Call insurance company'],
-                    ['🧹', 'Clean garage shelves'],
-                  ].map(([icon, text]) => (
-                    <div key={text} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      background: colors.bgCard, borderRadius: 8, padding: '7px 10px',
-                      fontSize: 12, color: colors.textMuted,
-                      border: `1px solid ${colors.border}`,
-                    }}>
-                      <span>{icon}</span>
-                      <span>{text}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 12, fontStyle: 'italic' }}>
-                  Add one above to get started ↑
+              <div style={{ marginBottom: 8 }}>
+                <div style={{
+                  background: `linear-gradient(135deg, ${colors.accent}12, ${colors.accent}06)`,
+                  border: `1px solid ${colors.accent}33`,
+                  borderRadius: 14,
+                  padding: '16px 14px 14px',
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: colors.text, fontFamily: 'Nunito, sans-serif', marginBottom: 6, lineHeight: 1.5 }}>
+                    Got a one-time task to track?
+                  </div>
+                  <div style={{ fontSize: 12, color: colors.textDim, lineHeight: 1.6, marginBottom: 12 }}>
+                    Things like <em style={{ color: colors.textMuted }}>"search for a new house"</em> or <em style={{ color: colors.textMuted }}>"fix the fire alarm battery"</em> — not daily habits, just things you need to get done once.
+                  </div>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Tap to try one →
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[
+                      ['🏠', 'Search for a new house'],
+                      ['🛒', 'Buy a new laptop charger'],
+                      ['🔋', 'Fix smoke alarm battery'],
+                      ['📞', 'Call insurance company'],
+                    ].map(([icon, text]) => (
+                      <button
+                        key={text}
+                        onClick={() => { setNewTitle(text); inputRef.current?.focus() }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          background: colors.bgCard,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 8, padding: '8px 10px',
+                          fontSize: 12, color: colors.textMuted,
+                          cursor: 'pointer', textAlign: 'left',
+                          fontFamily: 'Nunito, sans-serif',
+                          transition: 'border-color 0.15s, color 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent + '88'; e.currentTarget.style.color = colors.text }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textMuted }}
+                      >
+                        <span>{icon}</span>
+                        <span>{text}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
