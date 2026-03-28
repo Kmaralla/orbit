@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
       details: {
         testMode: forceAll,
         totalSubscriptions: allSubscriptions.length,
-        matchingNotifyTime: subscriptionsToNotify.length,
+        matchingNotifyTime: candidateSubs.length,
         sent,
         failed
       }

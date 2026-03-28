@@ -9,6 +9,8 @@ import Privacy from './pages/Privacy'
 import Demo from './pages/Demo'
 import QuickCheckin from './pages/QuickCheckin'
 import Analytics from './pages/Analytics'
+import GuestCheckin from './pages/GuestCheckin'
+import SideQuests from './pages/SideQuests'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -36,6 +38,8 @@ export default function App() {
             <Route path="/usecase/:id/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
             <Route path="/quick-checkin" element={<ProtectedRoute><QuickCheckin /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+            <Route path="/checkin/:token" element={<GuestCheckin />} />
+            <Route path="/side-quests" element={<ProtectedRoute><SideQuests /></ProtectedRoute>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

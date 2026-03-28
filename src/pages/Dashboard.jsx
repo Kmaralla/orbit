@@ -12,6 +12,7 @@ import BuildHabit from '../components/BuildHabit'
 import BuildDay from '../components/BuildDay'
 import OrbitChat from '../components/OrbitChat'
 import CloseOrbit from '../components/CloseOrbit'
+import ShareOrbit from '../components/ShareOrbit'
 import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const [planAllDone, setPlanAllDone] = useState(false)
   const [closingOrbit, setClosingOrbit] = useState(null) // orbit object to close
   const [showClosedOrbits, setShowClosedOrbits] = useState(false)
+  const [sharingOrbit, setSharingOrbit] = useState(null) // orbit object to share
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -638,6 +640,25 @@ export default function Dashboard() {
               cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
               transition: 'all 0.15s',
             }}
+            onClick={() => navigate('/side-quests')}
+            onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = colors.borderLight}
+          >
+            <span style={{ fontSize: 22, flexShrink: 0 }}>☄️</span>
+            <div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.textMuted }}>Side Quests</div>
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>One-time tasks — errands, fix-its, to-dos</div>
+            </div>
+          </button>
+          <button
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: colors.bgCard,
+              border: `1px solid ${colors.borderLight}`,
+              borderRadius: 14, padding: '12px 18px',
+              cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
+              transition: 'all 0.15s',
+            }}
             onClick={() => setShowBuildHabit(true)}
             onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
             onMouseLeave={e => e.currentTarget.style.borderColor = colors.borderLight}
@@ -1138,12 +1159,12 @@ export default function Dashboard() {
                     <span>⚙️</span> Edit
                   </button>
                   <button
-                    style={{ ...s.actionBtnSmall, ...(copiedId === uc.id ? { background: '#1a3a1a', color: '#7dba7d' } : {}) }}
-                    onClick={(e) => copyOrbitLink(uc.id, e)}
-                    onMouseEnter={e => { if (copiedId !== uc.id) { e.currentTarget.style.background = colors.borderLight; e.currentTarget.style.color = colors.text } }}
-                    onMouseLeave={e => { if (copiedId !== uc.id) { e.currentTarget.style.background = colors.border; e.currentTarget.style.color = colors.textMuted } }}
+                    style={s.actionBtnSmall}
+                    onClick={(e) => { e.stopPropagation(); setSharingOrbit(uc) }}
+                    onMouseEnter={e => { e.currentTarget.style.background = colors.borderLight; e.currentTarget.style.color = colors.text }}
+                    onMouseLeave={e => { e.currentTarget.style.background = colors.border; e.currentTarget.style.color = colors.textMuted }}
                   >
-                    <span>🔗</span> {copiedId === uc.id ? 'Copied!' : 'Link'}
+                    <span>🔗</span> Share
                   </button>
                   <button
                     style={s.actionBtnSmall}
@@ -1244,6 +1265,14 @@ export default function Dashboard() {
             setClosingOrbit(null)
           }}
           onCancel={() => setClosingOrbit(null)}
+        />
+      )}
+
+      {sharingOrbit && (
+        <ShareOrbit
+          orbit={sharingOrbit}
+          userId={user.id}
+          onClose={() => setSharingOrbit(null)}
         />
       )}
 

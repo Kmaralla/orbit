@@ -44,6 +44,7 @@ export default function Usecase() {
   const [editingItem, setEditingItem] = useState(null)
   const [newItem, setNewItem] = useState({ label: '', value_type: 'checkbox', frequency: 'daily', customDays: [], description: '' })
   const [draggedItem, setDraggedItem] = useState(null)
+  const [dragOverItem, setDragOverItem] = useState(null)
   const [toast, setToast] = useState(null) // { message, emoji, type }
   const [glowItem, setGlowItem] = useState(null) // itemId with active glow
   const [celebratedItems] = useState(new Set())
@@ -200,6 +201,7 @@ export default function Usecase() {
   const handleDragOver = (e, targetItem) => {
     e.preventDefault()
     if (!draggedItem || draggedItem.id === targetItem.id) return
+    setDragOverItem(targetItem.id)
   }
 
   const handleDrop = async (e, targetItem) => {
@@ -221,10 +223,12 @@ export default function Usecase() {
     }
 
     setDraggedItem(null)
+    setDragOverItem(null)
   }
 
   const handleDragEnd = () => {
     setDraggedItem(null)
+    setDragOverItem(null)
   }
 
   // Filter items for today based on frequency
@@ -260,11 +264,15 @@ export default function Usecase() {
     dragHandle: {
       cursor: 'grab',
       color: colors.textDim,
-      fontSize: 16,
-      padding: '4px',
-      opacity: 0.5,
-      transition: 'opacity 0.2s',
+      fontSize: 14,
+      padding: '6px 5px',
+      borderRadius: 6,
+      opacity: 0.4,
+      transition: 'opacity 0.2s, background 0.15s',
       userSelect: 'none',
+      lineHeight: 1.1,
+      letterSpacing: '1px',
+      flexShrink: 0,
     },
     itemLabel: { fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 600, color: colors.text, marginBottom: 2 },
     itemDesc: { fontSize: 12, color: colors.textDim },
@@ -491,28 +499,29 @@ export default function Usecase() {
               key={item.id}
               style={{
                 ...s.itemCard,
-                opacity: draggedItem?.id === item.id ? 0.5 : 1,
-                borderColor: glowItem === item.id ? colors.accent : colors.border,
-                boxShadow: glowItem === item.id ? `0 0 0 3px ${colors.accent}33` : 'none',
-                transition: 'border-color 0.2s, box-shadow 0.2s, opacity 0.2s',
+                opacity: draggedItem?.id === item.id ? 0.4 : 1,
+                borderColor: glowItem === item.id ? colors.accent : dragOverItem === item.id ? colors.accent + 'aa' : colors.border,
+                boxShadow: glowItem === item.id ? `0 0 0 3px ${colors.accent}33` : dragOverItem === item.id ? `0 0 0 2px ${colors.accent}44` : 'none',
+                borderTopWidth: dragOverItem === item.id ? 3 : 1,
+                transition: 'border-color 0.15s, box-shadow 0.15s, opacity 0.2s, border-top-width 0.1s',
               }}
               draggable
               onDragStart={e => handleDragStart(e, item)}
               onDragOver={e => handleDragOver(e, item)}
               onDrop={e => handleDrop(e, item)}
               onDragEnd={handleDragEnd}
-              onMouseEnter={e => { if (glowItem !== item.id) e.currentTarget.style.borderColor = colors.borderLight }}
-              onMouseLeave={e => { if (glowItem !== item.id) e.currentTarget.style.borderColor = colors.border }}
+              onMouseEnter={e => { if (glowItem !== item.id && dragOverItem !== item.id) e.currentTarget.style.borderColor = colors.borderLight }}
+              onMouseLeave={e => { if (glowItem !== item.id && dragOverItem !== item.id) e.currentTarget.style.borderColor = colors.border }}
             >
               <div style={s.itemRow}>
                 {/* Drag handle */}
                 <div
                   style={s.dragHandle}
-                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                  onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = colors.border }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.background = 'transparent' }}
                   title="Drag to reorder"
                 >
-                  ⋮⋮
+                  ⠿⠿
                 </div>
 
                 <div style={{ flex: 1 }}>
@@ -595,6 +604,13 @@ export default function Usecase() {
               </div>
             </div>
           ))
+        )}
+
+        {/* Drag hint — only when 2+ items and not currently dragging */}
+        {todayItems.length >= 2 && !draggedItem && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, marginBottom: 4, opacity: 0.45 }}>
+            <span style={{ fontSize: 12, color: colors.textDim, userSelect: 'none' }}>⠿⠿ drag to reorder</span>
+          </div>
         )}
 
         {/* Not scheduled today section */}
