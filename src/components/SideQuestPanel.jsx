@@ -26,6 +26,12 @@ export default function SideQuestPanel() {
   }, [user])
 
   useEffect(() => {
+    const handler = () => setOpen(true)
+    window.addEventListener('openSideQuests', handler)
+    return () => window.removeEventListener('openSideQuests', handler)
+  }, [])
+
+  useEffect(() => {
     if (open && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 200)
     }

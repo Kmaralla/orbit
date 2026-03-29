@@ -45,6 +45,14 @@ export default function Dashboard() {
   const [closingOrbit, setClosingOrbit] = useState(null) // orbit object to close
   const [showClosedOrbits, setShowClosedOrbits] = useState(false)
   const [sharingOrbit, setSharingOrbit] = useState(null) // orbit object to share
+  const [showOnboardingHint, setShowOnboardingHint] = useState(
+    () => localStorage.getItem('orbit_hint_dismissed') !== 'true'
+  )
+
+  const dismissHint = () => {
+    localStorage.setItem('orbit_hint_dismissed', 'true')
+    setShowOnboardingHint(false)
+  }
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -672,6 +680,49 @@ export default function Dashboard() {
           </button>
         </div>
 
+        {/* Onboarding hint — shows for users with orbits, dismissible */}
+        {!loading && usecases.length > 0 && usecases.length <= 5 && showOnboardingHint && (
+          <div style={{
+            background: colors.bgCard,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 16,
+            padding: '16px 20px',
+            marginBottom: 24,
+            display: 'flex',
+            gap: 16,
+            alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>💡</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 8 }}>
+                Here's what you can do in Orbit
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {[
+                  { icon: '🔥', text: 'Want to build a habit?', cta: 'Create an orbit', action: () => setShowAdd(true) },
+                  { icon: '🤖', text: 'Not sure how to structure it?', cta: 'Ask AI to design it for you', action: () => setShowBuildHabit(true) },
+                  { icon: '☄️', text: 'Have a one-time task — not a daily habit?', cta: 'Use Side Quests (tab on the right →)', action: () => window.dispatchEvent(new CustomEvent('openSideQuests')) },
+                  { icon: '🗓️', text: 'Already tracking things?', cta: 'Plan your day across all orbits', action: () => setShowBuildDay(true) },
+                ].map(({ icon, text, cta, action }) => (
+                  <div key={cta} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13 }}>
+                    <span style={{ flexShrink: 0 }}>{icon}</span>
+                    <span style={{ color: colors.textDim }}>{text}</span>
+                    <button
+                      onClick={action}
+                      style={{ background: 'none', border: 'none', color: colors.accent, cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: 0, fontFamily: 'Nunito, sans-serif', textDecoration: 'underline', textUnderlineOffset: 3, flexShrink: 0 }}
+                    >{cta}</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={dismissHint}
+              style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4, flexShrink: 0, marginTop: -2 }}
+              title="Dismiss"
+            >✕</button>
+          </div>
+        )}
+
         {/* Top Focus Section - show fewer on mobile */}
         {!loading && topFocus.length > 0 && (
           <div style={s.focusSection}>
@@ -1023,13 +1074,74 @@ export default function Dashboard() {
             ))}
           </div>
         ) : usecases.length === 0 ? (
-          <div style={s.emptyState}>
-            <span style={s.emptyIcon}>🌌</span>
-            <h2 style={s.emptyTitle}>Your orbit is empty</h2>
-            <p style={s.emptyText}>Create your first tracking orbit — for Dad's health, your kids, career goals, or anything that matters.</p>
-            <button style={s.addBtn} onClick={() => setShowAdd(true)}>
-              <span>+</span> Create First Orbit
-            </button>
+          <div style={{ maxWidth: 560, margin: '0 auto', padding: '8px 0 40px' }}>
+            <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 800, color: colors.text, marginBottom: 6 }}>
+              What are you here to track? 🎯
+            </div>
+            <p style={{ fontSize: 14, color: colors.textDim, lineHeight: 1.7, marginBottom: 28 }}>
+              Orbit keeps you consistent — on daily habits, life goals, or just things you need to get done. Here's how to start:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Path 1 — AI-built orbit */}
+              <button
+                onClick={() => setShowBuildHabit(true)}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 16, background: `linear-gradient(135deg, ${colors.accent}18, ${colors.accent}08)`, border: `1.5px solid ${colors.accent}55`, borderRadius: 16, padding: '18px 20px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent}
+                onMouseLeave={e => e.currentTarget.style.borderColor = colors.accent + '55'}
+              >
+                <span style={{ fontSize: 28, flexShrink: 0, marginTop: 2 }}>🤖</span>
+                <div>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 800, color: colors.accent, marginBottom: 4 }}>
+                    Tell me your goal — I'll design the orbit
+                  </div>
+                  <div style={{ fontSize: 13, color: colors.textDim, lineHeight: 1.6 }}>
+                    Want to <em style={{ color: colors.textMuted }}>sleep better, exercise more, be more present with your kids</em>? Describe it and Orbit AI builds the daily tracking system for you.
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: colors.accent, fontWeight: 700 }}>Ask AI to build my orbit →</div>
+                </div>
+              </button>
+
+              {/* Path 2 — Manual orbit */}
+              <button
+                onClick={() => setShowAdd(true)}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 16, background: colors.bgCard, border: `1.5px solid ${colors.border}`, borderRadius: 16, padding: '18px 20px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '66'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
+              >
+                <span style={{ fontSize: 28, flexShrink: 0, marginTop: 2 }}>＋</span>
+                <div>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 800, color: colors.text, marginBottom: 4 }}>
+                    I know what I want to track
+                  </div>
+                  <div style={{ fontSize: 13, color: colors.textDim, lineHeight: 1.6 }}>
+                    Create an orbit yourself — name it, pick your check-in items, and start building streaks. Great for things like <em style={{ color: colors.textMuted }}>Dad's health, kids' routine, or career goals</em>.
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: colors.textMuted, fontWeight: 700 }}>Create orbit manually →</div>
+                </div>
+              </button>
+
+              {/* Path 3 — Side Quests */}
+              <button
+                onClick={() => {
+                  // open the side quest panel by dispatching a custom event
+                  window.dispatchEvent(new CustomEvent('openSideQuests'))
+                }}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 16, background: colors.bgCard, border: `1.5px solid ${colors.border}`, borderRadius: 16, padding: '18px 20px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '66'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
+              >
+                <span style={{ fontSize: 28, flexShrink: 0, marginTop: 2 }}>☄️</span>
+                <div>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 800, color: colors.text, marginBottom: 4 }}>
+                    Just have a one-time task to get done?
+                  </div>
+                  <div style={{ fontSize: 13, color: colors.textDim, lineHeight: 1.6 }}>
+                    Not a habit — just something to tick off. Like <em style={{ color: colors.textMuted }}>"search for a new house", "fix smoke alarm battery"</em>, or <em style={{ color: colors.textMuted }}>"call the insurance company"</em>. Use Side Quests.
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: colors.textMuted, fontWeight: 700 }}>Open Side Quests →</div>
+                </div>
+              </button>
+            </div>
           </div>
         ) : (
           <>
