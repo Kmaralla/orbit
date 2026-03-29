@@ -686,22 +686,59 @@ export default function Dashboard() {
             background: colors.bgCard,
             border: `1px solid ${colors.border}`,
             borderRadius: 16,
-            padding: '16px 20px',
+            padding: isMobile ? '12px 14px' : '16px 20px',
             marginBottom: 24,
-            display: 'flex',
-            gap: 16,
-            alignItems: 'flex-start',
           }}>
-            <span style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>💡</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 8 }}>
-                Here's what you can do in Orbit
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isMobile ? 10 : 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>💡</span>
+                <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 13, fontWeight: 700, color: colors.text }}>
+                  What can you do in Orbit?
+                </span>
               </div>
+              <button
+                onClick={dismissHint}
+                style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '2px 4px' }}
+                title="Dismiss"
+              >✕</button>
+            </div>
+
+            {isMobile ? (
+              /* Mobile: 2×2 compact chips */
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { icon: '🔥', label: 'Build a habit', action: () => setShowAdd(true) },
+                  { icon: '🤖', label: 'Ask AI to design', action: () => setShowBuildHabit(true) },
+                  { icon: '☄️', label: 'One-time tasks', action: () => window.dispatchEvent(new CustomEvent('openSideQuests')) },
+                  { icon: '🗓️', label: 'Plan my day', action: () => setShowBuildDay(true) },
+                ].map(({ icon, label, action }) => (
+                  <button
+                    key={label}
+                    onClick={action}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: colors.bg, border: `1px solid ${colors.border}`,
+                      borderRadius: 10, padding: '10px 12px',
+                      cursor: 'pointer', textAlign: 'left',
+                      fontFamily: 'Nunito, sans-serif', fontSize: 13, fontWeight: 600,
+                      color: colors.textMuted, transition: 'border-color 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
+                  >
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* Desktop: inline bullet lines */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 {[
                   { icon: '🔥', text: 'Want to build a habit?', cta: 'Create an orbit', action: () => setShowAdd(true) },
                   { icon: '🤖', text: 'Not sure how to structure it?', cta: 'Ask AI to design it for you', action: () => setShowBuildHabit(true) },
-                  { icon: '☄️', text: 'Have a one-time task — not a daily habit?', cta: 'Use Side Quests (tab on the right →)', action: () => window.dispatchEvent(new CustomEvent('openSideQuests')) },
+                  { icon: '☄️', text: 'Have a one-time task — not a daily habit?', cta: 'Use Side Quests (tab on right →)', action: () => window.dispatchEvent(new CustomEvent('openSideQuests')) },
                   { icon: '🗓️', text: 'Already tracking things?', cta: 'Plan your day across all orbits', action: () => setShowBuildDay(true) },
                 ].map(({ icon, text, cta, action }) => (
                   <div key={cta} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13 }}>
@@ -714,12 +751,7 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-            </div>
-            <button
-              onClick={dismissHint}
-              style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4, flexShrink: 0, marginTop: -2 }}
-              title="Dismiss"
-            >✕</button>
+            )}
           </div>
         )}
 

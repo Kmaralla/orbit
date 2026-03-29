@@ -12,11 +12,13 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
   const [notifyTime, setNotifyTime] = useState('09:00')
   const [endDate, setEndDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const save = async () => {
     if (!name.trim()) return
     setSaving(true)
-    const { data } = await supabase.from('usecases').insert({
+    setSaveError('')
+    const { data, error } = await supabase.from('usecases').insert({
       user_id: userId,
       name: name.trim(),
       description: description.trim(),
@@ -26,6 +28,12 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
       notify_time: notifyEmail.trim() ? notifyTime : null,
       end_date: endDate || null,
     }).select().single()
+    if (error) {
+      console.error('Create orbit error:', error)
+      setSaveError(error.message)
+      setSaving(false)
+      return
+    }
     if (data) onCreated(data)
     setSaving(false)
   }
@@ -99,6 +107,11 @@ export default function AddUsecase({ onClose, onCreated, userId, icons }) {
           <input style={{ ...s.input, marginBottom: 0 }} type="time" value={notifyTime} onChange={e => setNotifyTime(e.target.value)} />
         </div>
 
+        {saveError && (
+          <div style={{ background: '#3a1a1a', border: '1px solid #ff6b6b44', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#ff6b6b', lineHeight: 1.5 }}>
+            ⚠️ {saveError}
+          </div>
+        )}
         <div style={s.row}>
           <button style={s.cancelBtn} onClick={onClose}>Cancel</button>
           <button style={s.saveBtn} onClick={save} disabled={saving}>
