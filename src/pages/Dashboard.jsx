@@ -45,14 +45,6 @@ export default function Dashboard() {
   const [closingOrbit, setClosingOrbit] = useState(null) // orbit object to close
   const [showClosedOrbits, setShowClosedOrbits] = useState(false)
   const [sharingOrbit, setSharingOrbit] = useState(null) // orbit object to share
-  const [showOnboardingHint, setShowOnboardingHint] = useState(
-    () => localStorage.getItem('orbit_hint_dismissed') !== 'true'
-  )
-
-  const dismissHint = () => {
-    localStorage.setItem('orbit_hint_dismissed', 'true')
-    setShowOnboardingHint(false)
-  }
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -611,147 +603,67 @@ export default function Dashboard() {
             <h1 style={s.greeting}>{greeting}, {userName} 👋</h1>
             <p style={s.greetingSub}>
               {usecases.length === 0
-                ? 'Create your first orbit to start tracking'
-                : `You have ${usecases.length} orbit${usecases.length > 1 ? 's' : ''} in motion`}
+                ? 'Track habits, hit goals, and stay on top of what matters.'
+                : `${usecases.length} orbit${usecases.length > 1 ? 's' : ''} in motion · habits, goals, tasks — all tracked`}
             </p>
           </div>
         </div>
 
-        {/* Action buttons strip */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
-          {usecases.length >= 2 && (
-            <button
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                background: colors.bgCard,
-                border: `1px solid ${colors.accent}`,
-                borderRadius: 14, padding: '12px 18px',
-                cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
-                transition: 'all 0.15s',
-              }}
-              onClick={() => setShowBuildDay(true)}
-              onMouseEnter={e => e.currentTarget.style.background = colors.accent + '18'}
-              onMouseLeave={e => e.currentTarget.style.background = colors.bgCard}
-            >
-              <span style={{ fontSize: 22, flexShrink: 0 }}>🗓️</span>
-              <div>
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.accent }}>{todayPlan ? 'Replan My Day' : 'Plan My Day'}</div>
-                <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>{todayPlan ? 'Generate a new plan for today' : 'Pick top priorities across your orbits'}</div>
-              </div>
-            </button>
-          )}
-          <button
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              background: colors.bgCard,
-              border: `1px solid ${colors.borderLight}`,
-              borderRadius: 14, padding: '12px 18px',
-              cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
-              transition: 'all 0.15s',
-            }}
-            onClick={() => setShowBuildHabit(true)}
-            onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = colors.borderLight}
-          >
-            <span style={{ fontSize: 22, flexShrink: 0 }}>✨</span>
-            <div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.textMuted }}>Build an Orbit</div>
-              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>Orbit AI designs a new orbit for you</div>
-            </div>
-          </button>
-          <button
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              background: colors.accentGradient,
-              border: 'none',
-              borderRadius: 14, padding: '12px 18px',
-              cursor: 'pointer', textAlign: 'left', flex: 1, minWidth: 180,
-              transition: 'opacity 0.15s',
-            }}
-            onClick={() => setShowAdd(true)}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            <span style={{ fontSize: 22, flexShrink: 0 }}>＋</span>
-            <div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: '#fff' }}>New Orbit</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>Manually track anything</div>
-            </div>
-          </button>
-        </div>
-
-        {/* Onboarding hint — shows for users with orbits, dismissible */}
-        {!loading && usecases.length > 0 && usecases.length <= 5 && showOnboardingHint && (
-          <div style={{
-            background: colors.bgCard,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 16,
-            padding: isMobile ? '12px 14px' : '16px 20px',
-            marginBottom: 24,
-          }}>
-            {/* Header row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isMobile ? 10 : 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16 }}>💡</span>
-                <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 13, fontWeight: 700, color: colors.text }}>
-                  What can you do in Orbit?
-                </span>
-              </div>
+        {/* Merged action section */}
+        {!loading && (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
+            {[
+              {
+                icon: '✨',
+                title: 'Build with AI',
+                desc: 'Describe a goal — AI designs your orbit',
+                accent: true,
+                action: () => setShowBuildHabit(true),
+              },
+              {
+                icon: '＋',
+                title: 'New Orbit',
+                desc: 'Manually set up daily habit tracking',
+                action: () => setShowAdd(true),
+              },
+              {
+                icon: '☄️',
+                title: 'Side Quests',
+                desc: 'One-time tasks, not daily habits',
+                action: () => window.dispatchEvent(new CustomEvent('openSideQuests')),
+              },
+              ...(usecases.length >= 2 ? [{
+                icon: '🗓️',
+                title: todayPlan ? 'Replan My Day' : 'Plan My Day',
+                desc: 'Pick today\'s priorities across orbits',
+                action: () => setShowBuildDay(true),
+              }] : []),
+            ].map(({ icon, title, desc, accent, action }) => (
               <button
-                onClick={dismissHint}
-                style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '2px 4px' }}
-                title="Dismiss"
-              >✕</button>
-            </div>
-
-            {isMobile ? (
-              /* Mobile: 2×2 compact chips */
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {[
-                  { icon: '🔥', label: 'Build a habit', action: () => setShowAdd(true) },
-                  { icon: '🤖', label: 'Ask AI to design', action: () => setShowBuildHabit(true) },
-                  { icon: '☄️', label: 'One-time tasks', action: () => window.dispatchEvent(new CustomEvent('openSideQuests')) },
-                  { icon: '🗓️', label: 'Plan my day', action: () => setShowBuildDay(true) },
-                ].map(({ icon, label, action }) => (
-                  <button
-                    key={label}
-                    onClick={action}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      background: colors.bg, border: `1px solid ${colors.border}`,
-                      borderRadius: 10, padding: '10px 12px',
-                      cursor: 'pointer', textAlign: 'left',
-                      fontFamily: 'Nunito, sans-serif', fontSize: 13, fontWeight: 600,
-                      color: colors.textMuted, transition: 'border-color 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = colors.accent + '88'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = colors.border}
-                  >
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              /* Desktop: inline bullet lines */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {[
-                  { icon: '🔥', text: 'Want to build a habit?', cta: 'Create an orbit', action: () => setShowAdd(true) },
-                  { icon: '🤖', text: 'Not sure how to structure it?', cta: 'Ask AI to design it for you', action: () => setShowBuildHabit(true) },
-                  { icon: '☄️', text: 'Have a one-time task — not a daily habit?', cta: 'Use Side Quests (tab on right →)', action: () => window.dispatchEvent(new CustomEvent('openSideQuests')) },
-                  { icon: '🗓️', text: 'Already tracking things?', cta: 'Plan your day across all orbits', action: () => setShowBuildDay(true) },
-                ].map(({ icon, text, cta, action }) => (
-                  <div key={cta} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13 }}>
-                    <span style={{ flexShrink: 0 }}>{icon}</span>
-                    <span style={{ color: colors.textDim }}>{text}</span>
-                    <button
-                      onClick={action}
-                      style={{ background: 'none', border: 'none', color: colors.accent, cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: 0, fontFamily: 'Nunito, sans-serif', textDecoration: 'underline', textUnderlineOffset: 3, flexShrink: 0 }}
-                    >{cta}</button>
-                  </div>
-                ))}
-              </div>
-            )}
+                key={title}
+                onClick={action}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                  gap: 6,
+                  background: accent ? `linear-gradient(135deg, ${colors.accent}22, ${colors.accent}0a)` : colors.bgCard,
+                  border: `1px solid ${accent ? colors.accent + '66' : colors.border}`,
+                  borderRadius: 14,
+                  padding: isMobile ? '12px 12px' : '14px 16px',
+                  cursor: 'pointer', textAlign: 'left',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent + '99'; e.currentTarget.style.background = colors.accent + '18' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = accent ? colors.accent + '66' : colors.border; e.currentTarget.style.background = accent ? `linear-gradient(135deg, ${colors.accent}22, ${colors.accent}0a)` : colors.bgCard }}
+              >
+                <span style={{ fontSize: isMobile ? 20 : 22 }}>{icon}</span>
+                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 12 : 13, fontWeight: 800, color: accent ? colors.accent : colors.text }}>
+                  {title}
+                </div>
+                {!isMobile && (
+                  <div style={{ fontSize: 11, color: colors.textDim, lineHeight: 1.4 }}>{desc}</div>
+                )}
+              </button>
+            ))}
           </div>
         )}
 

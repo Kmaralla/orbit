@@ -19,6 +19,8 @@ export default function SideQuestPanel() {
   const [showDone, setShowDone] = useState(false)
   const [celebration, setCelebration] = useState(null) // { id, emoji }
   const [firstLoad, setFirstLoad] = useState(true)
+  const [draggedQuest, setDraggedQuest] = useState(null)
+  const [dragOverQuest, setDragOverQuest] = useState(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export default function SideQuestPanel() {
       .from('side_quests')
       .select('*')
       .eq('user_id', user.id)
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
     setQuests(data || [])
     setLoading(false)
@@ -51,15 +54,55 @@ export default function SideQuestPanel() {
   const addQuest = async () => {
     const title = newTitle.trim()
     if (!title) return
+    // New quests go to the top (sort_order = 0, shift others down)
+    const minOrder = quests.filter(q => !q.completed).reduce((min, q) => Math.min(min, q.sort_order ?? 0), 0)
     const { data, error } = await supabase
       .from('side_quests')
-      .insert({ user_id: user.id, title, completed: false })
+      .insert({ user_id: user.id, title, completed: false, sort_order: minOrder - 1 })
       .select()
       .single()
     if (!error && data) {
       setQuests(prev => [data, ...prev])
       setNewTitle('')
     }
+  }
+
+  const handleDragStart = (quest) => setDraggedQuest(quest)
+
+  const handleDragOver = (e, quest) => {
+    e.preventDefault()
+    if (!draggedQuest || draggedQuest.id === quest.id) return
+    setDragOverQuest(quest.id)
+  }
+
+  const handleDrop = async (e, targetQuest) => {
+    e.preventDefault()
+    if (!draggedQuest || draggedQuest.id === targetQuest.id) return
+
+    // Only reorder within active quests
+    const active = quests.filter(q => !q.completed)
+    const rest = quests.filter(q => q.completed)
+    const fromIdx = active.findIndex(q => q.id === draggedQuest.id)
+    const toIdx = active.findIndex(q => q.id === targetQuest.id)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    const reordered = [...active]
+    reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, draggedQuest)
+
+    setQuests([...reordered, ...rest])
+    setDraggedQuest(null)
+    setDragOverQuest(null)
+
+    // Persist sort_order
+    for (let i = 0; i < reordered.length; i++) {
+      await supabase.from('side_quests').update({ sort_order: i }).eq('id', reordered[i].id)
+    }
+  }
+
+  const handleDragEnd = () => {
+    setDraggedQuest(null)
+    setDragOverQuest(null)
   }
 
   const toggleQuest = async (quest) => {
@@ -317,10 +360,21 @@ export default function SideQuestPanel() {
                 colors={colors}
                 isCelebrating={celebration?.id === quest.id}
                 celebrationEmoji={celebration?.emoji}
+                isDragOver={dragOverQuest === quest.id}
+                isDragging={draggedQuest?.id === quest.id}
                 onToggle={toggleQuest}
                 onDelete={deleteQuest}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onDragEnd={handleDragEnd}
               />
             ))}
+            {active.length >= 2 && !draggedQuest && (
+              <div style={{ textAlign: 'center', fontSize: 11, color: colors.textDim, opacity: 0.5, marginTop: 2, userSelect: 'none' }}>
+                ⠿ drag to reorder
+              </div>
+            )}
 
             {/* All-done celebration */}
             {active.length === 0 && done.length > 0 && (
@@ -367,11 +421,16 @@ export default function SideQuestPanel() {
   )
 }
 
-function QuestRow({ quest, colors, isCelebrating, celebrationEmoji, onToggle, onDelete }) {
+function QuestRow({ quest, colors, isCelebrating, celebrationEmoji, isDragOver, isDragging, onToggle, onDelete, onDragStart, onDragOver, onDrop, onDragEnd }) {
   const [hovered, setHovered] = useState(false)
 
   return (
     <div
+      draggable={!quest.completed}
+      onDragStart={() => onDragStart(quest)}
+      onDragOver={e => onDragOver(e, quest)}
+      onDrop={e => onDrop(e, quest)}
+      onDragEnd={onDragEnd}
       style={{
         position: 'relative',
         display: 'flex',
@@ -380,15 +439,13 @@ function QuestRow({ quest, colors, isCelebrating, celebrationEmoji, onToggle, on
         padding: '10px 10px',
         borderRadius: 10,
         marginBottom: 6,
-        background: isCelebrating
-          ? `linear-gradient(135deg, #22c55e18, #22c55e08)`
-          : quest.completed
-          ? colors.bg
-          : colors.bg,
-        border: `1px solid ${isCelebrating ? '#22c55e55' : hovered ? colors.borderLight : colors.border}`,
-        opacity: quest.completed ? 0.65 : 1,
-        transition: 'border-color 0.15s, background 0.2s',
+        background: isCelebrating ? `linear-gradient(135deg, #22c55e18, #22c55e08)` : colors.bg,
+        border: `1px solid ${isCelebrating ? '#22c55e55' : isDragOver ? colors.accent + 'aa' : hovered ? colors.borderLight : colors.border}`,
+        borderTopWidth: isDragOver ? 3 : 1,
+        opacity: isDragging ? 0.4 : quest.completed ? 0.65 : 1,
+        transition: 'border-color 0.15s, background 0.2s, opacity 0.2s',
         animation: isCelebrating ? 'questPop 0.4s ease' : 'none',
+        cursor: quest.completed ? 'default' : 'auto',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -406,6 +463,19 @@ function QuestRow({ quest, colors, isCelebrating, celebrationEmoji, onToggle, on
         }}>
           {celebrationEmoji}
         </div>
+      )}
+
+      {/* Drag handle — only for active quests */}
+      {!quest.completed && (
+        <div
+          style={{
+            fontSize: 12, color: colors.textDim, cursor: 'grab',
+            opacity: hovered ? 0.7 : 0.25, transition: 'opacity 0.15s',
+            userSelect: 'none', flexShrink: 0, letterSpacing: '1px', lineHeight: 1,
+            padding: '2px 1px',
+          }}
+          title="Drag to reorder"
+        >⠿</div>
       )}
 
       {/* Check button */}
