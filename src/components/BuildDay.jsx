@@ -1,41 +1,21 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../hooks/useTheme'
-import { getBuildDayPlan } from '../lib/claude'
 import { calculateStreak } from '../lib/streaks'
 import { playCheckSound, playLogSound } from '../lib/sounds'
-
-const TIME_OPTIONS = [
-  { key: 'quick', label: 'Quick', sub: '~15 min', icon: '⚡' },
-  { key: 'normal', label: 'Normal', sub: '~30 min', icon: '✓' },
-  { key: 'deep', label: 'All In', sub: '60+ min', icon: '🎯' },
-]
-
-const ENERGY_OPTIONS = [
-  { key: 'low', label: 'Low', sub: 'Just the basics', icon: '🔋' },
-  { key: 'medium', label: 'Good', sub: 'Steady & focused', icon: '⚡' },
-  { key: 'high', label: 'High', sub: 'On fire today', icon: '🚀' },
-]
-
-const PRIORITY_COLORS = {
-  high:   { bg: '#22c55e18', border: '#22c55e44', label: '#22c55e', badge: 'Must Do' },
-  medium: { bg: '#6c63ff18', border: '#6c63ff44', label: '#6c63ff', badge: 'Do It' },
-  low:    { bg: '#ffffff08', border: '#ffffff18', label: '#8a86a0', badge: 'If Time' },
-}
 
 export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
   const { colors } = useTheme()
 
-  // phase: 'questions' | 'building' | 'plan' | 'complete' | 'error'
-  const [phase, setPhase] = useState('questions')
-  const [answers, setAnswers] = useState({ time: null, energy: null, focusOrbits: [] })
-  const [plan, setPlan] = useState(null)
-  const [planItems, setPlanItems] = useState({}) // { orbitId: [item, ...] }
-  const [dayEntries, setDayEntries] = useState({}) // { itemId: value }
-  const [saving, setSaving] = useState({}) // { itemId: bool }
-
-  // Data fetched in background while user answers questions
+  // phase: 'pick' | 'plan' | 'complete'
+  const [phase, setPhase] = useState('pick')
   const [orbitsWithTasks, setOrbitsWithTasks] = useState(null)
+  const [selectedTasks, setSelectedTasks] = useState(new Set())
+  const [expandedOrbits, setExpandedOrbits] = useState(new Set())
+  const [plan, setPlan] = useState(null)
+  const [planItems, setPlanItems] = useState({})
+  const [dayEntries, setDayEntries] = useState({})
+  const [saving, setSaving] = useState({})
 
   const today = new Date().toISOString().split('T')[0]
   const todayDayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()]
@@ -57,9 +37,7 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
     const orbitIds = orbits.map(o => o.id)
 
     const { data: allItems } = await supabase
-      .from('checklist_items')
-      .select('*')
-      .in('usecase_id', orbitIds)
+      .from('checklist_items').select('*').in('usecase_id', orbitIds)
 
     const sixtyDaysAgo = new Date()
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
@@ -70,123 +48,135 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
       .eq('user_id', userId)
       .gte('date', sixtyDaysAgo.toISOString().split('T')[0])
 
-    const todayEntryIds = new Set(
-      (allEntries || []).filter(e => e.date === today).map(e => e.checklist_item_id)
+    const todayDoneIds = new Set(
+      (allEntries || []).filter(e => e.date === today && e.value && e.value !== '' && e.value !== 'false')
+        .map(e => e.checklist_item_id)
     )
 
     const enriched = orbits.map(orbit => {
       const orbitItems = (allItems || []).filter(i => i.usecase_id === orbit.id)
       const todayItems = orbitItems.filter(i => isScheduledToday(i.frequency))
 
-      let bestStreak = 0
-      let anyAtRisk = false
-      for (const item of orbitItems) {
+      const tasksWithStreaks = todayItems.map(item => {
         const itemEntries = (allEntries || [])
           .filter(e => e.checklist_item_id === item.id)
           .map(e => ({ date: e.date, value: e.value }))
         const streak = calculateStreak(itemEntries, item.frequency)
-        if (streak.current > bestStreak) bestStreak = streak.current
-        if (streak.atRisk) anyAtRisk = true
-      }
+        return { ...item, streak, checkedToday: todayDoneIds.has(item.id) }
+      })
 
-      const checkedTodayCount = todayItems.filter(i => todayEntryIds.has(i.id)).length
+      const anyAtRisk = tasksWithStreaks.some(t => t.streak.atRisk)
+      const bestStreak = Math.max(0, ...tasksWithStreaks.map(t => t.streak.current))
 
-      return {
-        ...orbit,
-        tasks: todayItems.map(i => ({ ...i, checkedToday: todayEntryIds.has(i.id) })),
-        streakDays: bestStreak,
-        atRisk: anyAtRisk,
-        checkedTodayCount,
-      }
+      return { ...orbit, tasks: tasksWithStreaks, atRisk: anyAtRisk, bestStreak }
     }).filter(o => o.tasks.length > 0)
 
     setOrbitsWithTasks(enriched)
-  }
 
-  const toggleFocusOrbit = (name) => {
-    setAnswers(prev => ({
-      ...prev,
-      focusOrbits: prev.focusOrbits.includes(name)
-        ? prev.focusOrbits.filter(n => n !== name)
-        : [...prev.focusOrbits, name],
-    }))
-  }
-
-  const canBuild = answers.time && answers.energy
-
-  const handleBuild = async () => {
-    if (!canBuild) return
-    setPhase('building')
-
-    let data = orbitsWithTasks
-    if (!data) {
-      await new Promise(resolve => {
-        const check = setInterval(() => {
-          if (orbitsWithTasks !== null) { clearInterval(check); resolve() }
-        }, 100)
-        setTimeout(() => { clearInterval(check); resolve() }, 8000)
-      })
-      data = orbitsWithTasks
+    // Smart pre-selection: at-risk streaks first, then high-streak incomplete tasks
+    const preSelected = new Set()
+    for (const orbit of enriched) {
+      for (const task of orbit.tasks) {
+        if (task.checkedToday) continue
+        if (task.streak.atRisk || (task.streak.current >= 3)) {
+          preSelected.add(task.id)
+        }
+      }
     }
+    // Cap at 8 pre-selected
+    const capped = new Set([...preSelected].slice(0, 8))
+    setSelectedTasks(capped)
 
-    if (!data || data.length === 0) { setPhase('error'); return }
+    // Auto-expand orbits that have pre-selected tasks or are at-risk
+    const autoExpand = new Set(
+      enriched.filter(o => o.atRisk || o.tasks.some(t => capped.has(t.id))).map(o => o.id)
+    )
+    // If nothing auto-expands, expand first orbit
+    if (autoExpand.size === 0 && enriched.length > 0) autoExpand.add(enriched[0].id)
+    setExpandedOrbits(autoExpand)
+  }
 
-    const result = await getBuildDayPlan(data, answers)
-    if (!result) { setPhase('error'); return }
+  const toggleTask = (taskId) => {
+    setSelectedTasks(prev => {
+      const next = new Set(prev)
+      next.has(taskId) ? next.delete(taskId) : next.add(taskId)
+      return next
+    })
+  }
 
-    setPlan(result)
+  const toggleOrbit = (orbitId) => {
+    setExpandedOrbits(prev => {
+      const next = new Set(prev)
+      next.has(orbitId) ? next.delete(orbitId) : next.add(orbitId)
+      return next
+    })
+  }
 
-    // Map Claude task labels → real item objects
+  const selectAllOrbit = (orbit, e) => {
+    e.stopPropagation()
+    const ids = orbit.tasks.filter(t => !t.checkedToday).map(t => t.id)
+    const allSelected = ids.every(id => selectedTasks.has(id))
+    setSelectedTasks(prev => {
+      const next = new Set(prev)
+      if (allSelected) ids.forEach(id => next.delete(id))
+      else ids.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  const lockInPlan = () => {
+    if (!orbitsWithTasks || selectedTasks.size === 0) return
+
+    const builtPlan = orbitsWithTasks.map(orbit => {
+      const chosenTasks = orbit.tasks.filter(t => selectedTasks.has(t.id))
+      if (chosenTasks.length === 0) return null
+      return {
+        orbitId: orbit.id,
+        orbitName: orbit.name,
+        orbitIcon: orbit.icon,
+        priority: orbit.atRisk ? 'high' : 'medium',
+        tasks: chosenTasks.map(t => t.label),
+        reason: orbit.atRisk ? 'Streak at risk — don\'t break it today' : 'Keep the momentum going',
+      }
+    }).filter(Boolean)
+
     const items = {}
-    for (const planOrbit of result.plan || []) {
-      const orbitData = data.find(o => o.id === planOrbit.orbitId)
-      if (!orbitData) continue
-      items[planOrbit.orbitId] = planOrbit.tasks
-        .map(label => orbitData.tasks.find(t => t.label === label))
-        .filter(Boolean)
+    for (const planOrbit of builtPlan) {
+      const orbitData = orbitsWithTasks.find(o => o.id === planOrbit.orbitId)
+      items[planOrbit.orbitId] = orbitData.tasks.filter(t => selectedTasks.has(t.id))
     }
-    setPlanItems(items)
 
-    // Seed dayEntries with already-checked items
     const initial = {}
-    for (const orbitData of data) {
-      for (const task of orbitData.tasks) {
+    for (const orbit of orbitsWithTasks) {
+      for (const task of orbit.tasks) {
         if (task.checkedToday) initial[task.id] = task.value_type === 'checkbox' ? 'true' : '1'
       }
     }
+
+    const orbitCount = builtPlan.length
+    const summary = `${selectedTasks.size} task${selectedTasks.size !== 1 ? 's' : ''} across ${orbitCount} orbit${orbitCount !== 1 ? 's' : ''}`
+
+    setPlan({ plan: builtPlan, greeting: 'Your plan is locked in. Let\'s do this.', summary })
+    setPlanItems(items)
     setDayEntries(initial)
 
-    // ── Save plan to localStorage so Dashboard can show "Today's Priorities" ──
-    const planData = {
-      date: today,
-      plan: result.plan,
-      planItems: items,
-      greeting: result.greeting,
-      summary: result.summary,
-    }
-    localStorage.setItem(`orbit_today_plan_${userId}`, JSON.stringify(planData))
+    localStorage.setItem(`orbit_today_plan_${userId}`, JSON.stringify({
+      date: today, plan: builtPlan, planItems: items,
+      greeting: 'Your plan is locked in. Let\'s do this.', summary,
+    }))
     onPlanSaved?.()
-
     setPhase('plan')
   }
 
   const saveEntry = async (itemId, value, valueType) => {
     setSaving(prev => ({ ...prev, [itemId]: true }))
-
     await supabase.from('checkin_entries').upsert({
-      checklist_item_id: itemId,
-      user_id: userId,
-      date: today,
-      value: String(value),
+      checklist_item_id: itemId, user_id: userId, date: today, value: String(value),
     }, { onConflict: 'checklist_item_id,user_id,date' })
-
     const newEntries = { ...dayEntries, [itemId]: String(value) }
     setDayEntries(newEntries)
     setSaving(prev => ({ ...prev, [itemId]: false }))
-
     valueType === 'checkbox' ? playCheckSound() : playLogSound()
-
-    // Update localStorage entries so Dashboard stays in sync
     try {
       const raw = localStorage.getItem(`orbit_today_plan_${userId}`)
       if (raw) {
@@ -195,261 +185,257 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
         localStorage.setItem(`orbit_today_plan_${userId}`, JSON.stringify(stored))
       }
     } catch {}
-
     const allIds = Object.values(planItems).flat().map(i => i.id)
     const doneCount = allIds.filter(id => {
       const v = id === itemId ? String(value) : newEntries[id]
       return v && v !== '' && v !== 'false'
     }).length
-    if (doneCount === allIds.length && allIds.length > 0) {
-      setTimeout(() => setPhase('complete'), 600)
-    }
+    if (doneCount === allIds.length && allIds.length > 0) setTimeout(() => setPhase('complete'), 600)
   }
 
   const s = {
     overlay: { position: 'fixed', inset: 0, background: '#000c', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 },
-    box: { background: colors.bgCard, border: `1px solid ${colors.borderLight}`, borderRadius: 24, width: '100%', maxWidth: 560, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-    header: { padding: '24px 28px 20px', borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0 },
-    title: { fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 800, color: colors.text, marginBottom: 4 },
-    subtitle: { fontSize: 13, color: colors.textDim },
+    box: { background: colors.bgCard, border: `1px solid ${colors.borderLight}`, borderRadius: 24, width: '100%', maxWidth: 580, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+    header: { padding: '20px 24px 16px', borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0 },
+    title: { fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 800, color: colors.text, marginBottom: 2 },
+    subtitle: { fontSize: 12, color: colors.textDim },
     closeBtn: { background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 4 },
-    body: { padding: '24px 28px', overflowY: 'auto', flex: 1 },
-    sectionLabel: { fontSize: 12, fontWeight: 700, color: colors.textDim, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10, marginTop: 20 },
-    optionRow: { display: 'flex', gap: 10, flexWrap: 'wrap' },
-    optionBtn: { flex: 1, minWidth: 90, background: colors.bgInput, border: `1.5px solid ${colors.border}`, borderRadius: 14, padding: '12px 10px', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' },
-    optionIcon: { fontSize: 22, marginBottom: 4 },
-    optionLabel: { fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 2 },
-    optionSub: { fontSize: 11, color: colors.textDim },
-    orbitChip: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${colors.border}`, background: colors.bgInput, cursor: 'pointer', fontSize: 13, fontFamily: 'Nunito, sans-serif', fontWeight: 600, color: colors.textMuted, transition: 'all 0.15s' },
-    footer: { padding: '16px 28px', borderTop: `1px solid ${colors.border}`, flexShrink: 0 },
-    buildBtn: { width: '100%', background: colors.accentGradient, border: 'none', borderRadius: 14, padding: '16px', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', transition: 'opacity 0.2s' },
-    greeting: { fontSize: 15, color: colors.textMuted, lineHeight: 1.6, marginBottom: 6, fontStyle: 'italic' },
-    orbitCard: { borderRadius: 16, padding: '16px 18px', marginBottom: 12, border: '1.5px solid', transition: 'all 0.2s' },
-    orbitCardHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
-    orbitCardName: { fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: colors.text, flex: 1 },
-    priorityBadge: { fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, letterSpacing: '0.3px' },
-    orbitReason: { fontSize: 12, color: colors.textDim, lineHeight: 1.5, borderTop: `1px solid ${colors.border}`, paddingTop: 8, marginBottom: 2 },
-    taskDot: { width: 6, height: 6, borderRadius: '50%', background: colors.accent, flexShrink: 0 },
-    skippedSection: { marginTop: 8, marginBottom: 16 },
-    skippedTitle: { fontSize: 12, fontWeight: 700, color: colors.textDim, letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 8 },
-    skippedItem: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: colors.textDim, padding: '6px 0', borderBottom: `1px solid ${colors.border}` },
+    body: { padding: '16px 20px', overflowY: 'auto', flex: 1 },
+    footer: { padding: '14px 20px', borderTop: `1px solid ${colors.border}`, flexShrink: 0 },
+    lockBtn: { width: '100%', background: colors.accentGradient, border: 'none', borderRadius: 14, padding: '14px', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', transition: 'opacity 0.2s' },
   }
-
-  // ── Building ─────────────────────────────────────────────────────
-  if (phase === 'building') return (
-    <div style={s.overlay}>
-      <div style={{ ...s.box, alignItems: 'center', justifyContent: 'center', padding: 48, textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 20, animation: 'spin 2s linear infinite' }}>✨</div>
-        <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 700, color: colors.text, marginBottom: 8 }}>Planning your day...</div>
-        <div style={{ fontSize: 14, color: colors.textDim }}>Orbit AI is picking what matters most today</div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    </div>
-  )
-
-  // ── Error ─────────────────────────────────────────────────────────
-  if (phase === 'error') return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={{ ...s.box, alignItems: 'center', justifyContent: 'center', padding: 48, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>😕</div>
-        <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 700, color: colors.text, marginBottom: 8 }}>Couldn't build your plan</div>
-        <div style={{ fontSize: 14, color: colors.textDim, marginBottom: 24 }}>No tasks scheduled for today, or Orbit AI timed out. Try again!</div>
-        <button style={{ ...s.buildBtn, maxWidth: 200 }} onClick={onClose}>Close</button>
-      </div>
-    </div>
-  )
 
   // ── Complete ──────────────────────────────────────────────────────
-  if (phase === 'complete') {
-    const orbitNames = plan?.plan?.map(p => `${p.orbitIcon} ${p.orbitName}`).join('  ·  ')
-    return (
-      <div style={s.overlay}>
-        <div style={{ ...s.box, alignItems: 'center', justifyContent: 'center', padding: '48px 36px', textAlign: 'center' }}>
-          <div style={{ fontSize: 56, marginBottom: 16, animation: 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>🎉</div>
-          <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 800, color: colors.text, marginBottom: 8, letterSpacing: '-0.5px' }}>Day Complete!</div>
-          <div style={{ fontSize: 14, color: colors.textDim, marginBottom: 24, lineHeight: 1.6 }}>
-            You showed up for every item in today's plan.<br />Streaks are building. Keep the momentum.
-          </div>
-          <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, marginBottom: 32, letterSpacing: '0.3px' }}>{orbitNames}</div>
-          <button style={{ ...s.buildBtn, maxWidth: 240 }} onClick={onClose}>Done 🔥</button>
-          <style>{`@keyframes popIn { 0% { transform: scale(0.3); opacity:0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity:1; } }`}</style>
+  if (phase === 'complete') return (
+    <div style={s.overlay}>
+      <div style={{ ...s.box, alignItems: 'center', justifyContent: 'center', padding: '48px 36px', textAlign: 'center' }}>
+        <div style={{ fontSize: 56, marginBottom: 16, animation: 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>🎉</div>
+        <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 800, color: colors.text, marginBottom: 8 }}>Day Complete!</div>
+        <div style={{ fontSize: 14, color: colors.textDim, lineHeight: 1.6, marginBottom: 28 }}>
+          You showed up for every task in today's plan.<br />Streaks building. Keep the momentum.
         </div>
+        <button style={{ ...s.lockBtn, maxWidth: 200 }} onClick={onClose}>Done 🔥</button>
+        <style>{`@keyframes popIn { 0% { transform:scale(0.3);opacity:0; } 60% { transform:scale(1.15); } 100% { transform:scale(1);opacity:1; } }`}</style>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // ── Plan ──────────────────────────────────────────────────────────
+  // ── Plan (check-in mode) ──────────────────────────────────────────
   if (phase === 'plan' && plan) {
     const allPlanIds = Object.values(planItems).flat().map(i => i.id)
-    const doneIds = allPlanIds.filter(id => { const v = dayEntries[id]; return v && v !== '' && v !== 'false' })
-    const progress = allPlanIds.length > 0 ? Math.round((doneIds.length / allPlanIds.length) * 100) : 0
+    const doneCount = allPlanIds.filter(id => { const v = dayEntries[id]; return v && v !== '' && v !== 'false' }).length
+    const progress = allPlanIds.length > 0 ? Math.round((doneCount / allPlanIds.length) * 100) : 0
+    const PCOLS = { high: { bg: '#22c55e18', border: '#22c55e44', label: '#22c55e' }, medium: { bg: colors.accent + '12', border: colors.accent + '44', label: colors.accent } }
 
     return (
       <div style={s.overlay} onClick={onClose}>
         <div style={s.box} onClick={e => e.stopPropagation()}>
           <div style={s.header}>
             <div>
-              <div style={s.title}>Today's Priorities 🎯</div>
+              <div style={s.title}>Today's Plan 🎯</div>
               <div style={{ ...s.subtitle, color: colors.accent }}>{plan.summary}</div>
             </div>
             <button style={s.closeBtn} onClick={onClose}>✕</button>
           </div>
 
-          {allPlanIds.length > 0 && (
-            <div style={{ padding: '10px 28px 0', flexShrink: 0 }}>
-              <div style={{ background: colors.border, borderRadius: 4, height: 4, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${progress}%`, background: progress === 100 ? '#22c55e' : colors.accentGradient, borderRadius: 4, transition: 'width 0.4s ease' }} />
-              </div>
-              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 5, textAlign: 'right' }}>{doneIds.length} / {allPlanIds.length} done</div>
+          <div style={{ padding: '8px 20px 0', flexShrink: 0 }}>
+            <div style={{ background: colors.border, borderRadius: 4, height: 4, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progress}%`, background: progress === 100 ? '#22c55e' : colors.accentGradient, borderRadius: 4, transition: 'width 0.4s ease' }} />
             </div>
-          )}
+            <div style={{ fontSize: 11, color: colors.textDim, marginTop: 5, textAlign: 'right' }}>{doneCount}/{allPlanIds.length} done</div>
+          </div>
 
           <div style={s.body}>
-            <p style={s.greeting}>"{plan.greeting}"</p>
-
-            {plan.plan?.map((planOrbit) => {
-              const pc = PRIORITY_COLORS[planOrbit.priority] || PRIORITY_COLORS.medium
-              const orbitPlanItems = planItems[planOrbit.orbitId] || []
-              const orbitDone = orbitPlanItems.length > 0 && orbitPlanItems.every(item => {
-                const v = dayEntries[item.id]; return v && v !== '' && v !== 'false'
-              })
+            {plan.plan?.map(planOrbit => {
+              const pc = PCOLS[planOrbit.priority] || PCOLS.medium
+              const items = planItems[planOrbit.orbitId] || []
+              const orbitDone = items.length > 0 && items.every(item => { const v = dayEntries[item.id]; return v && v !== '' && v !== 'false' })
 
               return (
-                <div key={planOrbit.orbitId} style={{ ...s.orbitCard, background: orbitDone ? '#22c55e0e' : pc.bg, borderColor: orbitDone ? '#22c55e44' : pc.border }}>
-                  <div style={s.orbitCardHeader}>
-                    <span style={{ fontSize: 22 }}>{planOrbit.orbitIcon}</span>
-                    <span style={s.orbitCardName}>{planOrbit.orbitName}</span>
+                <div key={planOrbit.orbitId} style={{ borderRadius: 14, padding: '14px 16px', marginBottom: 10, background: orbitDone ? '#22c55e0a' : pc.bg, border: `1.5px solid ${orbitDone ? '#22c55e33' : pc.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 20 }}>{planOrbit.orbitIcon}</span>
+                    <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text, flex: 1 }}>{planOrbit.orbitName}</span>
                     {orbitDone
-                      ? <span style={{ ...s.priorityBadge, background: '#22c55e22', color: '#22c55e' }}>✓ Done</span>
-                      : planOrbit.priority === 'high' && <span style={{ ...s.priorityBadge, background: pc.label + '22', color: pc.label }}>{pc.badge}</span>
-                    }
+                      ? <span style={{ fontSize: 11, fontWeight: 700, background: '#22c55e22', color: '#22c55e', padding: '2px 8px', borderRadius: 10 }}>✓ Done</span>
+                      : planOrbit.priority === 'high' && <span style={{ fontSize: 11, fontWeight: 700, background: pc.label + '22', color: pc.label, padding: '2px 8px', borderRadius: 10 }}>Streak at risk</span>}
                   </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
-                    {orbitPlanItems.map(item => {
-                      const val = dayEntries[item.id]
-                      const done = val && val !== '' && val !== 'false'
-                      return (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
-                          <div style={{ flex: 1, fontSize: 13, color: done ? colors.textDim : colors.text, fontWeight: 500, textDecoration: done ? 'line-through' : 'none' }}>
-                            {item.label}
+                  {items.map(item => {
+                    const val = dayEntries[item.id]
+                    const done = val && val !== '' && val !== 'false'
+                    return (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                        <div style={{ flex: 1, fontSize: 13, color: done ? colors.textDim : colors.text, textDecoration: done ? 'line-through' : 'none' }}>{item.label}</div>
+                        {saving[item.id] && <span style={{ fontSize: 10, color: colors.accent }}>•••</span>}
+                        {item.value_type === 'checkbox' && (
+                          <button onClick={() => saveEntry(item.id, !done, 'checkbox')} style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${done ? '#22c55e' : pc.label}`, background: done ? '#22c55e' : 'transparent', color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>{done ? '✓' : ''}</button>
+                        )}
+                        {item.value_type === 'score' && (
+                          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                            {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                              <button key={n} onClick={() => saveEntry(item.id, n, 'score')} style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${Number(val) === n ? pc.label : colors.border}`, background: Number(val) === n ? pc.label : 'transparent', color: Number(val) === n ? '#fff' : colors.textDim, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>{n}</button>
+                            ))}
                           </div>
-                          {saving[item.id] && <span style={{ fontSize: 10, color: colors.accent }}>•••</span>}
-
-                          {item.value_type === 'checkbox' && (
-                            <button
-                              style={{ width: 28, height: 28, borderRadius: '50%', border: `2px solid ${done ? '#22c55e' : pc.label}`, background: done ? '#22c55e' : 'transparent', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}
-                              onClick={() => saveEntry(item.id, !done, 'checkbox')}
-                            >{done ? '✓' : ''}</button>
-                          )}
-
-                          {item.value_type === 'score' && (
-                            <div style={{ display: 'flex', gap: 3 }}>
-                              {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                                <button key={n} style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${Number(val) === n ? pc.label : colors.border}`, background: Number(val) === n ? pc.label : 'transparent', color: Number(val) === n ? '#fff' : colors.textDim, fontSize: 10, fontWeight: 600, cursor: 'pointer' }} onClick={() => saveEntry(item.id, n, 'score')}>{n}</button>
-                              ))}
-                            </div>
-                          )}
-
-                          {item.value_type === 'number' && (
-                            <input style={{ width: 60, background: colors.bgInput, border: `1px solid ${colors.border}`, borderRadius: 7, padding: '5px 8px', color: colors.text, fontSize: 13, outline: 'none', textAlign: 'center' }} type="number" placeholder="0" defaultValue={val || ''} key={item.id + (val ?? '')} onBlur={e => { if (e.target.value) saveEntry(item.id, e.target.value, 'number') }} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  <div style={s.orbitReason}>{planOrbit.reason}</div>
+                        )}
+                        {item.value_type === 'number' && (
+                          <input style={{ width: 60, background: colors.bgInput, border: `1px solid ${colors.border}`, borderRadius: 7, padding: '5px 8px', color: colors.text, fontSize: 13, outline: 'none', textAlign: 'center' }} type="number" placeholder="0" defaultValue={val || ''} key={item.id + (val ?? '')} onBlur={e => { if (e.target.value) saveEntry(item.id, e.target.value, 'number') }} onKeyDown={e => e.key === 'Enter' && e.target.blur()} />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
-
-            {plan.skipped?.length > 0 && (
-              <div style={s.skippedSection}>
-                <div style={s.skippedTitle}>Skipping today</div>
-                {plan.skipped.map((s_item, i) => (
-                  <div key={i} style={s.skippedItem}>
-                    <span>{s_item.orbitIcon}</span>
-                    <span style={{ fontWeight: 600, color: colors.textMuted }}>{s_item.orbitName}</span>
-                    <span style={{ color: colors.textDim }}>— {s_item.reason}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div style={s.footer}>
-            <button style={{ ...s.buildBtn, opacity: 0.7 }} onClick={onClose}>Close — I'll check in from the dashboard</button>
+            <button style={{ ...s.lockBtn, background: 'none', border: `1px solid ${colors.border}`, color: colors.textDim, fontSize: 13, padding: '11px' }} onClick={() => setPhase('pick')}>
+              ← Edit my picks
+            </button>
           </div>
         </div>
       </div>
     )
   }
 
-  // ── Questions ─────────────────────────────────────────────────────
+  // ── Pick phase ────────────────────────────────────────────────────
+  const totalSelected = selectedTasks.size
+  const loading = !orbitsWithTasks
+
   return (
     <div style={s.overlay} onClick={onClose}>
       <div style={s.box} onClick={e => e.stopPropagation()}>
         <div style={s.header}>
           <div>
-            <div style={s.title}>Plan My Day ✨</div>
-            <div style={s.subtitle}>3 quick questions — Orbit AI picks what matters most</div>
+            <div style={s.title}>Plan My Day 🗓️</div>
+            <div style={s.subtitle}>
+              Tap tasks to pick what you'll do today — pre-selected based on streaks
+            </div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
 
         <div style={s.body}>
-          <div style={{ ...s.sectionLabel, marginTop: 0 }}>How much time do you have?</div>
-          <div style={s.optionRow}>
-            {TIME_OPTIONS.map(opt => (
-              <button key={opt.key} style={{ ...s.optionBtn, borderColor: answers.time === opt.key ? colors.accent : colors.border, background: answers.time === opt.key ? colors.accent + '18' : colors.bgInput }} onClick={() => setAnswers(prev => ({ ...prev, time: opt.key }))}>
-                <div style={s.optionIcon}>{opt.icon}</div>
-                <div style={{ ...s.optionLabel, color: answers.time === opt.key ? colors.accent : colors.text }}>{opt.label}</div>
-                <div style={s.optionSub}>{opt.sub}</div>
-              </button>
-            ))}
-          </div>
-
-          <div style={s.sectionLabel}>What's your energy today?</div>
-          <div style={s.optionRow}>
-            {ENERGY_OPTIONS.map(opt => (
-              <button key={opt.key} style={{ ...s.optionBtn, borderColor: answers.energy === opt.key ? colors.accent : colors.border, background: answers.energy === opt.key ? colors.accent + '18' : colors.bgInput }} onClick={() => setAnswers(prev => ({ ...prev, energy: opt.key }))}>
-                <div style={s.optionIcon}>{opt.icon}</div>
-                <div style={{ ...s.optionLabel, color: answers.energy === opt.key ? colors.accent : colors.text }}>{opt.label}</div>
-                <div style={s.optionSub}>{opt.sub}</div>
-              </button>
-            ))}
-          </div>
-
-          <div style={s.sectionLabel}>
-            Any orbit to prioritize? <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {orbits.map(orbit => {
-              const selected = answers.focusOrbits.includes(orbit.name)
-              return (
-                <button key={orbit.id} style={{ ...s.orbitChip, borderColor: selected ? colors.accent : colors.border, background: selected ? colors.accent + '18' : colors.bgInput, color: selected ? colors.accent : colors.textMuted }} onClick={() => toggleFocusOrbit(orbit.name)}>
-                  <span>{orbit.icon}</span>{orbit.name}
-                </button>
-              )
-            })}
-          </div>
-
-          {!orbitsWithTasks && (
-            <div style={{ fontSize: 12, color: colors.textDim, marginTop: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ animation: 'spin 1.5s linear infinite', display: 'inline-block' }}>⟳</span>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: colors.textDim }}>
+              <div style={{ width: 28, height: 28, border: `2px solid ${colors.accent}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
               Loading your tasks...
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
+          ) : (
+            orbitsWithTasks.map(orbit => {
+              const orbitSelectedCount = orbit.tasks.filter(t => selectedTasks.has(t.id)).length
+              const isExpanded = expandedOrbits.has(orbit.id)
+              const allTaskIds = orbit.tasks.filter(t => !t.checkedToday).map(t => t.id)
+              const allSelected = allTaskIds.length > 0 && allTaskIds.every(id => selectedTasks.has(id))
+
+              return (
+                <div key={orbit.id} style={{ marginBottom: 8, border: `1px solid ${orbit.atRisk ? '#f59e0b55' : colors.border}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+                  {/* Orbit header — click to expand/collapse */}
+                  <div
+                    onClick={() => toggleOrbit(orbit.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', background: isExpanded ? colors.bg : colors.bgCard, userSelect: 'none' }}
+                  >
+                    <span style={{ fontSize: 20, flexShrink: 0 }}>{orbit.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text }}>{orbit.name}</div>
+                      <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
+                        {orbit.tasks.length} task{orbit.tasks.length !== 1 ? 's' : ''} today
+                        {orbit.atRisk && <span style={{ color: '#f59e0b', marginLeft: 8 }}>⚠️ streak at risk</span>}
+                        {orbit.bestStreak > 0 && !orbit.atRisk && <span style={{ color: '#22c55e', marginLeft: 8 }}>🔥 {orbit.bestStreak} day streak</span>}
+                      </div>
+                    </div>
+                    {orbitSelectedCount > 0 && (
+                      <span style={{ background: colors.accent, color: '#fff', borderRadius: 20, padding: '2px 9px', fontSize: 11, fontWeight: 800 }}>
+                        {orbitSelectedCount} picked
+                      </span>
+                    )}
+                    {isExpanded && allTaskIds.length > 1 && (
+                      <button
+                        onClick={e => selectAllOrbit(orbit, e)}
+                        style={{ background: 'none', border: `1px solid ${colors.border}`, borderRadius: 6, padding: '3px 8px', color: colors.textDim, fontSize: 11, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', flexShrink: 0 }}
+                      >
+                        {allSelected ? 'Clear' : 'All'}
+                      </button>
+                    )}
+                    <span style={{ color: colors.textDim, fontSize: 14, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)', flexShrink: 0 }}>▾</span>
+                  </div>
+
+                  {/* Task list */}
+                  {isExpanded && (
+                    <div style={{ borderTop: `1px solid ${colors.border}` }}>
+                      {orbit.tasks.map(task => {
+                        const isSelected = selectedTasks.has(task.id)
+                        const alreadyDone = task.checkedToday
+
+                        return (
+                          <div
+                            key={task.id}
+                            onClick={() => !alreadyDone && toggleTask(task.id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 12,
+                              padding: '11px 14px',
+                              borderBottom: `1px solid ${colors.border}`,
+                              background: isSelected ? colors.accent + '0d' : 'transparent',
+                              cursor: alreadyDone ? 'default' : 'pointer',
+                              transition: 'background 0.15s',
+                              opacity: alreadyDone ? 0.5 : 1,
+                            }}
+                          >
+                            {/* Select circle */}
+                            <div style={{
+                              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                              border: `2px solid ${alreadyDone ? '#22c55e' : isSelected ? colors.accent : colors.border}`,
+                              background: alreadyDone ? '#22c55e' : isSelected ? colors.accent : 'transparent',
+                              color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.15s',
+                            }}>
+                              {(isSelected || alreadyDone) ? '✓' : ''}
+                            </div>
+
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, color: alreadyDone ? colors.textDim : colors.text, fontFamily: 'Nunito, sans-serif', fontWeight: 600, textDecoration: alreadyDone ? 'line-through' : 'none' }}>
+                                {task.label}
+                              </div>
+                              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2, display: 'flex', gap: 8 }}>
+                                <span>{task.value_type}</span>
+                                {alreadyDone && <span style={{ color: '#22c55e' }}>✓ done today</span>}
+                              </div>
+                            </div>
+
+                            {task.streak.atRisk && !alreadyDone && (
+                              <span style={{ fontSize: 11, background: '#f59e0b22', color: '#f59e0b', padding: '2px 7px', borderRadius: 8, fontWeight: 700, flexShrink: 0 }}>
+                                ⚠️ {task.streak.current}d
+                              </span>
+                            )}
+                            {task.streak.current >= 3 && !task.streak.atRisk && !alreadyDone && (
+                              <span style={{ fontSize: 11, background: '#22c55e18', color: '#22c55e', padding: '2px 7px', borderRadius: 8, fontWeight: 700, flexShrink: 0 }}>
+                                🔥 {task.streak.current}d
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
 
         <div style={s.footer}>
-          <button style={{ ...s.buildBtn, opacity: canBuild ? 1 : 0.4, cursor: canBuild ? 'pointer' : 'not-allowed' }} onClick={handleBuild} disabled={!canBuild}>
-            {canBuild ? 'Plan My Day →' : 'Answer the questions above'}
-          </button>
+          {totalSelected > 0 ? (
+            <button style={s.lockBtn} onClick={lockInPlan}>
+              Lock in {totalSelected} task{totalSelected !== 1 ? 's' : ''} →
+            </button>
+          ) : (
+            <button style={{ ...s.lockBtn, opacity: 0.4, cursor: 'not-allowed' }} disabled>
+              Tap tasks above to build your plan
+            </button>
+          )}
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

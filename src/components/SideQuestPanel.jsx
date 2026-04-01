@@ -44,7 +44,6 @@ export default function SideQuestPanel() {
       .from('side_quests')
       .select('*')
       .eq('user_id', user.id)
-      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
     setQuests(data || [])
     setLoading(false)
@@ -54,11 +53,9 @@ export default function SideQuestPanel() {
   const addQuest = async () => {
     const title = newTitle.trim()
     if (!title) return
-    // New quests go to the top (sort_order = 0, shift others down)
-    const minOrder = quests.filter(q => !q.completed).reduce((min, q) => Math.min(min, q.sort_order ?? 0), 0)
     const { data, error } = await supabase
       .from('side_quests')
-      .insert({ user_id: user.id, title, completed: false, sort_order: minOrder - 1 })
+      .insert({ user_id: user.id, title, completed: false })
       .select()
       .single()
     if (!error && data) {
@@ -94,10 +91,12 @@ export default function SideQuestPanel() {
     setDraggedQuest(null)
     setDragOverQuest(null)
 
-    // Persist sort_order
-    for (let i = 0; i < reordered.length; i++) {
-      await supabase.from('side_quests').update({ sort_order: i }).eq('id', reordered[i].id)
-    }
+    // Persist sort_order (silently skip if column doesn't exist yet)
+    try {
+      for (let i = 0; i < reordered.length; i++) {
+        await supabase.from('side_quests').update({ sort_order: i }).eq('id', reordered[i].id)
+      }
+    } catch {}
   }
 
   const handleDragEnd = () => {

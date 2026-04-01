@@ -14,6 +14,8 @@ import OrbitChat from '../components/OrbitChat'
 import CloseOrbit from '../components/CloseOrbit'
 import ShareOrbit from '../components/ShareOrbit'
 import SideQuestPanel from '../components/SideQuestPanel'
+import Organize from '../components/Organize'
+import ActivityStrip from '../components/ActivityStrip'
 import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
@@ -45,6 +47,9 @@ export default function Dashboard() {
   const [closingOrbit, setClosingOrbit] = useState(null) // orbit object to close
   const [showClosedOrbits, setShowClosedOrbits] = useState(false)
   const [sharingOrbit, setSharingOrbit] = useState(null) // orbit object to share
+  const [showOrganize, setShowOrganize] = useState(false)
+  const [activityEntries, setActivityEntries] = useState([])
+  const [activityTotalItems, setActivityTotalItems] = useState(0)
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -103,6 +108,10 @@ export default function Dashboard() {
       .select('*, checklist_items(usecase_id, frequency)')
       .eq('user_id', user.id)
       .gte('date', sixtyDaysAgo.toISOString().split('T')[0])
+
+    // Store entries + item count for ActivityStrip
+    setActivityEntries(allEntries || [])
+    setActivityTotalItems(items?.length || 0)
 
     // Calculate today's counts
     const today = new Date().toISOString().split('T')[0]
@@ -609,6 +618,11 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Activity strip — only when user has orbits */}
+        {!loading && usecases.length > 0 && (
+          <ActivityStrip entries={activityEntries} totalItems={activityTotalItems} />
+        )}
+
         {/* Merged action section */}
         {!loading && (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
@@ -637,6 +651,12 @@ export default function Dashboard() {
                 title: todayPlan ? 'Replan My Day' : 'Plan My Day',
                 desc: 'Pick today\'s priorities across orbits',
                 action: () => setShowBuildDay(true),
+              }] : []),
+              ...(usecases.length >= 2 ? [{
+                icon: '🧹',
+                title: 'Organize',
+                desc: 'AI reviews your habits and suggests cleanups',
+                action: () => setShowOrganize(true),
               }] : []),
             ].map(({ icon, title, desc, accent, action }) => (
               <button
@@ -1303,6 +1323,14 @@ export default function Dashboard() {
             setClosingOrbit(null)
           }}
           onCancel={() => setClosingOrbit(null)}
+        />
+      )}
+
+      {showOrganize && (
+        <Organize
+          orbits={usecases}
+          userId={user.id}
+          onClose={() => setShowOrganize(false)}
         />
       )}
 

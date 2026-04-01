@@ -91,6 +91,70 @@ Respond ONLY with valid JSON, no markdown fences:
   }
 }
 
+export async function getOrganizeSuggestions(orbits, completionData) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+  if (!apiKey) return null
+
+  const prompt = `You are a life-optimization advisor. A user has multiple orbits (life areas they track daily) and their completion history. Analyze their data and suggest practical reorganization to match their real bandwidth.
+
+ORBITS AND COMPLETION DATA:
+${JSON.stringify(completionData, null, 2)}
+
+RULES:
+- Be honest but kind — these are real commitments the user cares about
+- Only suggest merging orbits if they are genuinely overlapping in purpose
+- "Remove task" means archive it — it shows up too rarely to be worth tracking
+- "Change frequency" means a task is being done less often than daily, so scheduling it weekly/weekdays makes more sense
+- Cap at 5 total suggestions — prioritize the most impactful ones
+- If the data looks healthy, say so and suggest 1-2 refinements at most
+- Each suggestion must have a clear reason backed by the data
+
+Respond ONLY with valid JSON:
+{
+  "headline": "one sentence overall read of the user's orbit health",
+  "healthScore": 0-100,
+  "suggestions": [
+    {
+      "type": "remove_task" | "change_frequency" | "merge_orbits" | "pause_orbit" | "spotlight",
+      "orbitId": "uuid or null",
+      "orbitName": "string",
+      "targetOrbitId": "uuid (only for merge_orbits)",
+      "taskLabel": "string (only for remove_task / change_frequency)",
+      "newFrequency": "weekdays | weekly | custom (only for change_frequency)",
+      "title": "short action title",
+      "reason": "1-2 sentences backed by data",
+      "impact": "what will improve if they do this"
+    }
+  ]
+}`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1200,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  const data = await res.json()
+  if (data.error) return null
+
+  const text = data.content?.find(b => b.type === 'text')?.text || ''
+  try {
+    const clean = text.replace(/```json|```/g, '').trim()
+    return JSON.parse(clean)
+  } catch {
+    return null
+  }
+}
+
 export async function getClaudeAnalysis(usecaseName, entries, items) {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
 
