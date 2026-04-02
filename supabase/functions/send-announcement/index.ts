@@ -1,6 +1,7 @@
 // One-off announcement email to all users
-// Invoke with: { "send": true } to actually send emails
-// Without "send": true, it will just show who would receive it (dry run)
+// Invoke with: { "testEmail": "you@example.com" } to test on one address
+// Invoke with: { "send": true } to send to all users with notify_email set
+// Without either: dry run — shows who would receive it
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -27,62 +28,23 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     let actualSend = false
+    let testEmail: string | null = null
+
     try {
       const body = await req.json()
       if (body?.send === true) actualSend = true
+      if (body?.testEmail) testEmail = body.testEmail
     } catch {
       // No body = dry run
     }
 
-    // Get all unique user emails from usecases table
-    const { data: usecases } = await supabase
-      .from('usecases')
-      .select('notify_email, user_id, name, icon')
-      .not('notify_email', 'is', null)
-
-    const emailMap: Record<string, { orbits: { name: string; icon: string }[] }> = {}
-    for (const uc of usecases || []) {
-      if (!emailMap[uc.notify_email]) {
-        emailMap[uc.notify_email] = { orbits: [] }
-      }
-      emailMap[uc.notify_email].orbits.push({ name: uc.name, icon: uc.icon })
-    }
-
-    const emails = Object.keys(emailMap)
-
-    if (!actualSend) {
-      return new Response(
-        JSON.stringify({
-          dryRun: true,
-          message: 'Add { "send": true } to actually send emails',
-          wouldSendTo: emails,
-          totalUsers: emails.length
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const results: { email: string; status: string; error?: string }[] = []
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
-    for (let i = 0; i < emails.length; i++) {
-      const email = emails[i]
-      const userData = emailMap[email]
-
-      if (i > 0) await sleep(5000)
-
-      const orbitCount = userData.orbits.length
-      const orbitPreview = userData.orbits.slice(0, 3).map(o =>
-        `<span style="display:inline-block;background:#6c63ff22;border:1px solid #6c63ff33;padding:5px 12px;border-radius:20px;margin:3px;font-size:13px;color:#a8a4c8;">${o.icon} ${o.name}</span>`
-      ).join('')
-
-      const emailHtml = `
+    const buildEmailHtml = (appUrl: string) => `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>the moment you actually finish a goal</title>
+  <title>stop tracking noise. start ticking off wins.</title>
 </head>
 <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
@@ -98,96 +60,148 @@ Deno.serve(async (req) => {
   </td></tr>
 
   <!-- Opening -->
-  <tr><td style="padding-bottom:20px;">
+  <tr><td style="padding-bottom:24px;">
     <p style="font-size:17px;color:#1a1a2e;margin:0 0 14px 0;line-height:1.65;font-weight:400;">
-      There's a specific feeling when you actually finish something you set out to do.
+      You've been tracking consistently. That's genuinely hard to keep up.
     </p>
     <p style="font-size:17px;color:#1a1a2e;margin:0 0 14px 0;line-height:1.65;">
-      Not just crossing it off a to-do list. But genuinely closing a chapter — <em>"I showed up. I did the work. It's done."</em>
+      But we kept hearing two things: <em>"Some of my tasks, I just never do anymore"</em> — and — <em>"I have stuff to track that isn't a daily habit."</em>
     </p>
     <p style="font-size:17px;color:#1a1a2e;margin:0 0 0 0;line-height:1.65;">
-      That moment deserves more than just deleting an app or archiving a note. We wanted to give it a proper ceremony.
+      Two new features. Both built around that feedback.
     </p>
   </td></tr>
 
-  <tr><td style="padding:8px 0 24px 0;border-top:1px solid #f0f0f5;border-bottom:none;"></td></tr>
+  <tr><td style="padding:4px 0 28px 0;border-top:1px solid #f0f0f5;"></td></tr>
 
-  <!-- Feature: Close Orbit -->
-  <tr><td style="padding-bottom:24px;">
-    <p style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6c63ff;margin:0 0 14px 0;">New in Orbit</p>
+  <!-- Feature 1: Organize -->
+  <tr><td style="padding-bottom:28px;">
+    <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6c63ff;margin:0 0 12px 0;">New Feature #1</p>
 
-    <p style="font-size:17px;font-weight:700;color:#1a1a2e;margin:0 0 10px 0;line-height:1.4;">
-      🏁 Close an Orbit — with a proper celebration
+    <p style="font-size:19px;font-weight:800;color:#1a1a2e;margin:0 0 10px 0;line-height:1.35;letter-spacing:-0.3px;">
+      🧹 Organize — your habits, honestly reviewed
     </p>
     <p style="font-size:15px;color:#444460;margin:0 0 16px 0;line-height:1.7;">
-      You can now set a goal end date on any orbit. When that date arrives, Orbit taps you on the shoulder and asks: <strong>did you achieve it?</strong>
+      Orbit now looks at <strong>90 days of your completion history</strong> and tells you the truth — which tasks you're actually doing, which are just sitting there at 0%, and what's worth keeping vs. letting go.
     </p>
     <p style="font-size:15px;color:#444460;margin:0 0 20px 0;line-height:1.7;">
-      If yes — you get the moment you earned. Your stats appear: how many days you showed up, your best streak, completion rate. And a screen that says, plainly: <strong>Goal Achieved.</strong>
+      It gives you a health score and specific suggestions: remove tasks you've ignored for months, change a daily task to weekly if that's more realistic, or merge two overlapping orbits. One tap to apply.
     </p>
 
-    <!-- Celebration mockup -->
-    <div style="background:linear-gradient(135deg,#1a3a1a,#0d1a0d);border-radius:16px;padding:28px 24px;text-align:center;margin-bottom:20px;">
-      <div style="font-size:48px;margin-bottom:10px;">🏆</div>
-      <div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:6px;font-family:-apple-system,sans-serif;">Goal Achieved!</div>
-      <div style="font-size:14px;color:#86efac;margin-bottom:18px;line-height:1.5;">You did it. Your orbit is complete.</div>
-      <table width="100%" cellpadding="0" cellspacing="0">
-        <tr>
-          <td width="33%" style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px 6px;">
-            <div style="font-size:20px;font-weight:800;color:#22c55e;font-family:-apple-system,sans-serif;">21</div>
-            <div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">best streak</div>
-          </td>
-          <td width="4%"></td>
-          <td width="33%" style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px 6px;">
-            <div style="font-size:20px;font-weight:800;color:#22c55e;font-family:-apple-system,sans-serif;">28</div>
-            <div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">days tracked</div>
-          </td>
-          <td width="4%"></td>
-          <td width="33%" style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px 6px;">
-            <div style="font-size:20px;font-weight:800;color:#22c55e;font-family:-apple-system,sans-serif;">84%</div>
-            <div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">completion</div>
-          </td>
-        </tr>
-      </table>
-      <div style="font-size:13px;color:#4ade80;margin-top:16px;line-height:1.7;">28 days of showing up.<br>That's what builds a life.</div>
+    <!-- Organize mockup -->
+    <div style="background:#0d0d1a;border-radius:16px;padding:20px;margin-bottom:20px;border:1px solid #1e1e3a;">
+
+      <!-- Health score row -->
+      <div style="display:flex;align-items:center;gap:16px;background:#13131f;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+        <div style="text-align:center;min-width:48px;">
+          <div style="font-size:28px;font-weight:900;color:#f59e0b;line-height:1;font-family:-apple-system,sans-serif;">62</div>
+          <div style="font-size:9px;color:#6b6b8a;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">Health</div>
+        </div>
+        <div style="width:1px;height:36px;background:#1e1e3a;flex-shrink:0;"></div>
+        <div style="font-size:12px;color:#a8a4c8;line-height:1.5;font-style:italic;">
+          You're tracking well across 3 orbits — but 4 tasks haven't been completed in over 6 weeks.
+        </div>
+      </div>
+
+      <!-- Suggestion card 1 -->
+      <div style="background:#13131f;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;margin-bottom:8px;">
+        <div style="font-size:10px;font-weight:700;color:#6c63ff;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🗑️ Remove Task · Dad's Health</div>
+        <div style="font-size:13px;font-weight:700;color:#e8e4f0;margin-bottom:6px;">Archive "Blood pressure morning log"</div>
+        <div style="font-size:12px;color:#6b6b8a;line-height:1.5;margin-bottom:10px;">Not completed in 47 days. Removing it reduces noise and keeps your check-ins honest.</div>
+        <div style="display:flex;gap:8px;">
+          <span style="font-size:11px;color:#6b6b8a;border:1px solid #2a2a44;border-radius:6px;padding:5px 10px;cursor:pointer;">Dismiss</span>
+          <span style="font-size:11px;color:#fff;background:#6c63ff;border-radius:6px;padding:5px 10px;cursor:pointer;font-weight:700;">Apply</span>
+        </div>
+      </div>
+
+      <!-- Suggestion card 2 -->
+      <div style="background:#13131f;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:10px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📅 Change Frequency · Fitness</div>
+        <div style="font-size:13px;font-weight:700;color:#e8e4f0;margin-bottom:6px;">Change "Full workout" from daily → weekdays</div>
+        <div style="font-size:12px;color:#6b6b8a;line-height:1.5;margin-bottom:10px;">You complete this 68% of weekdays but nearly 0% on weekends. Match your schedule to reality.</div>
+        <div style="display:flex;gap:8px;">
+          <span style="font-size:11px;color:#6b6b8a;border:1px solid #2a2a44;border-radius:6px;padding:5px 10px;">Dismiss</span>
+          <span style="font-size:11px;color:#fff;background:#6c63ff;border-radius:6px;padding:5px 10px;font-weight:700;">Apply</span>
+        </div>
+      </div>
+
     </div>
 
-    <p style="font-size:15px;color:#444460;margin:0 0 14px 0;line-height:1.7;">
-      And if you didn't quite get there? That's okay too. Orbit closes with grace — shows what you <em>did</em> build, and reminds you that every attempt lays the foundation for the next one.
-    </p>
-    <p style="font-size:15px;color:#444460;margin:0 0 0 0;line-height:1.7;">
-      You can also extend the end date if you need more time. No judgment. Just flexibility.
+    <p style="font-size:14px;color:#555570;margin:0;line-height:1.7;">
+      Find it on your dashboard → <strong>🧹 Organize</strong>. Appears once you have 2+ orbits.
     </p>
   </td></tr>
 
-  <tr><td style="padding:4px 0 24px 0;border-top:1px solid #f0f0f5;"></td></tr>
+  <tr><td style="padding:4px 0 28px 0;border-top:1px solid #f0f0f5;"></td></tr>
 
-  <!-- How to use it -->
-  <tr><td style="padding-bottom:24px;">
-    <p style="font-size:14px;font-weight:700;color:#1a1a2e;margin:0 0 12px 0;">How to try it</p>
-    <p style="font-size:14px;color:#555570;margin:0 0 6px 0;line-height:1.7;">
-      1. Open any orbit → hit ⚙️ Edit → add a <strong>Goal end date</strong>
+  <!-- Feature 2: Side Quests -->
+  <tr><td style="padding-bottom:28px;">
+    <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6c63ff;margin:0 0 12px 0;">New Feature #2</p>
+
+    <p style="font-size:19px;font-weight:800;color:#1a1a2e;margin:0 0 10px 0;line-height:1.35;letter-spacing:-0.3px;">
+      ☄️ Side Quests — one-time tasks, no frequency needed
     </p>
-    <p style="font-size:14px;color:#555570;margin:0 0 6px 0;line-height:1.7;">
-      2. When the date arrives, you'll see a <strong>🏁 Close or extend</strong> prompt on your dashboard
+    <p style="font-size:15px;color:#444460;margin:0 0 14px 0;line-height:1.7;">
+      Some things just need to get done <em>once</em>. They don't belong in a daily orbit. They just need a place to live until you tick them off.
     </p>
-    <p style="font-size:14px;color:#555570;margin:0 0 20px 0;line-height:1.7;">
-      3. Tell Orbit whether you achieved it — and if you did, take a moment to actually feel it
+    <p style="font-size:15px;color:#444460;margin:0 0 6px 0;line-height:1.7;">
+      Things like:
     </p>
+    <p style="font-size:14px;color:#555570;margin:0 0 4px 0;line-height:1.8;">
+      &nbsp;&nbsp;🏠 &nbsp;<em>Search for a new house</em>
+    </p>
+    <p style="font-size:14px;color:#555570;margin:0 0 4px 0;line-height:1.8;">
+      &nbsp;&nbsp;🔋 &nbsp;<em>Fix the smoke alarm battery</em>
+    </p>
+    <p style="font-size:14px;color:#555570;margin:0 0 20px 0;line-height:1.8;">
+      &nbsp;&nbsp;📞 &nbsp;<em>Call the insurance company</em>
+    </p>
+
+    <!-- Side quest mockup -->
+    <div style="background:#0d0d1a;border-radius:16px;padding:20px;margin-bottom:20px;border:1px solid #1e1e3a;">
+      <div style="font-size:14px;font-weight:800;color:#e8e4f0;margin-bottom:4px;">☄️ Side Quests</div>
+      <div style="font-size:11px;color:#6b6b8a;margin-bottom:16px;">3 open · 2 done</div>
+
+      <!-- Quest items -->
+      <div style="background:#13131f;border:1px solid #1e1e3a;border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+        <div style="width:18px;height:18px;border-radius:50%;border:2px solid #2a2a44;flex-shrink:0;"></div>
+        <span style="font-size:13px;color:#e8e4f0;font-weight:600;">Search for a new house</span>
+      </div>
+      <div style="background:#13131f;border:1px solid #1e1e3a;border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+        <div style="width:18px;height:18px;border-radius:50%;border:2px solid #2a2a44;flex-shrink:0;"></div>
+        <span style="font-size:13px;color:#e8e4f0;font-weight:600;">Fix smoke alarm battery</span>
+      </div>
+      <div style="background:#13131f;border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;opacity:0.65;">
+        <div style="width:18px;height:18px;border-radius:50%;border:2px solid #22c55e;background:#22c55e;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+          <span style="color:#fff;font-size:10px;font-weight:700;">✓</span>
+        </div>
+        <span style="font-size:13px;color:#6b6b8a;font-weight:600;text-decoration:line-through;">Buy laptop charger</span>
+      </div>
+    </div>
+
+    <p style="font-size:14px;color:#555570;margin:0;line-height:1.7;">
+      The <strong>☄️ Side Quests</strong> panel lives on the right edge of your dashboard — always one tap away. Add a task, check it off, and move on.
+    </p>
+  </td></tr>
+
+  <tr><td style="padding:4px 0 28px 0;border-top:1px solid #f0f0f5;"></td></tr>
+
+  <!-- CTA -->
+  <tr><td style="padding-bottom:28px;">
     <a href="${appUrl}/dashboard"
-       style="display:inline-block;background:#6c63ff;color:#ffffff;padding:13px 26px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.1px;">
+       style="display:inline-block;background:#6c63ff;color:#ffffff;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;letter-spacing:0.1px;">
       Open Orbit →
     </a>
   </td></tr>
 
   <!-- Sign-off -->
-  <tr><td style="padding-top:8px;border-top:1px solid #f0f0f5;">
+  <tr><td style="border-top:1px solid #f0f0f5;">
     <p style="font-size:14px;color:#555570;margin:16px 0 4px 0;line-height:1.6;">
-      The small act of saying <em>"I finished this"</em> is underrated. We hope this helps.<br><br>
+      As always — building this for the people who actually use it. If something feels off or you want something different, just reply to this email.<br><br>
       — Karthiek
     </p>
     <p style="font-size:12px;color:#aaa8be;margin:12px 0 0 0;line-height:1.7;">
-      You're getting this because you use Orbit. That's it.
+      You're getting this because you use Orbit. That's it. No fluff.
     </p>
   </td></tr>
 
@@ -197,6 +211,58 @@ Deno.serve(async (req) => {
 </body>
 </html>`.trim()
 
+    // ── Test mode: send to a single email ───────────────────────────
+    if (testEmail) {
+      const html = buildEmailHtml(appUrl)
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'Karthiek from Orbit <hello@orbityours.com>',
+          to: testEmail,
+          subject: 'stop tracking noise. start ticking off wins.',
+          html,
+        }),
+      })
+      const data = await response.json()
+      return new Response(
+        JSON.stringify({ testMode: true, to: testEmail, ok: response.ok, data }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // ── Get all users with notify_email ─────────────────────────────
+    const { data: usecases } = await supabase
+      .from('usecases')
+      .select('notify_email')
+      .not('notify_email', 'is', null)
+
+    const emails = [...new Set((usecases || []).map(uc => uc.notify_email))]
+
+    if (!actualSend) {
+      return new Response(
+        JSON.stringify({
+          dryRun: true,
+          message: 'Pass { "testEmail": "you@example.com" } to test, or { "send": true } to send to all',
+          wouldSendTo: emails,
+          totalUsers: emails.length,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // ── Send to all ─────────────────────────────────────────────────
+    const results: { email: string; status: string; error?: string }[] = []
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    for (let i = 0; i < emails.length; i++) {
+      const email = emails[i]
+      if (i > 0) await sleep(5000)
+
+      const html = buildEmailHtml(appUrl)
       try {
         const response = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -207,18 +273,14 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             from: 'Karthiek from Orbit <hello@orbityours.com>',
             to: email,
-            subject: 'the moment you actually finish a goal',
-            html: emailHtml,
+            subject: 'stop tracking noise. start ticking off wins.',
+            html,
           }),
         })
-
         const responseData = await response.json()
-
         if (!response.ok) {
-          console.error(`Failed to send to ${email}:`, responseData)
           results.push({ email, status: 'failed', error: responseData.message })
         } else {
-          console.log(`✓ Sent to ${email}`)
           results.push({ email, status: 'sent' })
         }
       } catch (err) {
@@ -232,7 +294,7 @@ Deno.serve(async (req) => {
     await supabase.from('function_logs').insert({
       function_name: 'send-announcement',
       status: 'success',
-      details: { sent, failed, subject: 'the moment you actually finish a goal' }
+      details: { sent, failed, subject: 'stop tracking noise. start ticking off wins.' }
     })
 
     return new Response(

@@ -1,7 +1,7 @@
-// Supabase Edge Function: Send Email Reminders at User's Configured Time
+// Supabase Edge Function: Send smart daily reminder emails
 // Deploy: supabase functions deploy send-reminders
-// Schedule: Run every hour (0 * * * *) to check for users whose reminder time matches
-// Test: Invoke with { "test": true } to send to all users regardless of time
+// Schedule: every hour (0 * * * *)
+// Test: invoke with { "test": true }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -18,21 +18,107 @@ interface Usecase {
   notify_time: string
   timezone: string
   user_id: string
+  snoozed_until: string | null
 }
 
-// Get current hour in a specific timezone
+interface ChecklistItem {
+  id: string
+  usecase_id: string
+  label: string
+  value_type: string
+  frequency: string | null
+}
+
 function getHourInTimezone(timezone: string): number {
   try {
-    const now = new Date()
     const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      hour: 'numeric',
-      hour12: false
+      timeZone: timezone, hour: 'numeric', hour12: false,
     })
-    return parseInt(formatter.format(now), 10)
+    return parseInt(formatter.format(new Date()), 10)
+  } catch { return -1 }
+}
+
+function getLocalDate(timezone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date())
+    return parts // returns YYYY-MM-DD
   } catch {
-    return -1
+    return new Date().toISOString().split('T')[0]
   }
+}
+
+function getDayOfWeek(timezone: string): string {
+  try {
+    const day = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone, weekday: 'short',
+    }).format(new Date()).toLowerCase()
+    return day.slice(0, 3)
+  } catch { return 'mon' }
+}
+
+function isScheduledToday(frequency: string | null, dayOfWeek: string): boolean {
+  if (!frequency || frequency === 'daily') return true
+  if (frequency === 'weekdays') return ['mon', 'tue', 'wed', 'thu', 'fri'].includes(dayOfWeek)
+  if (frequency === 'weekly') return dayOfWeek === 'mon'
+  if (frequency.startsWith('custom:')) {
+    const days = frequency.split(':')[1]?.split(',') || []
+    return days.includes(dayOfWeek)
+  }
+  return true
+}
+
+// Dynamic subject line based on streak / day / time
+function buildSubject(
+  orbits: Usecase[],
+  checkedInYesterday: boolean,
+  bestStreak: number,
+  pendingCount: number,
+  hour: number,
+  dayOfWeek: string,
+): string {
+  const orbitName = orbits[0]?.name || 'your orbit'
+  const icon = orbits[0]?.icon || '○'
+
+  // At-risk: didn't check in yesterday and had a streak
+  if (!checkedInYesterday && bestStreak >= 3) {
+    return `${icon} Don't break your ${bestStreak}-day streak 🔥`
+  }
+
+  // Long streak — celebrate it
+  if (bestStreak >= 30) {
+    return `${icon} Day ${bestStreak} — legendary. Don't stop now 🏆`
+  }
+  if (bestStreak >= 14) {
+    return `${icon} ${bestStreak} days straight. That's real momentum 💪`
+  }
+  if (bestStreak >= 7) {
+    return `Week-long streak going 🔥 — ${orbitName} is waiting`
+  }
+
+  // Monday energy
+  if (dayOfWeek === 'mon') {
+    return `New week, same mission — ${orbits.length > 1 ? `${orbits.length} orbits` : orbitName} to check in ✦`
+  }
+  // Friday close-out
+  if (dayOfWeek === 'fri') {
+    return `Finish the week strong 💪 — ${pendingCount} thing${pendingCount !== 1 ? 's' : ''} left today`
+  }
+
+  // Evening nudge
+  if (hour >= 18) {
+    return `Before the day ends — ${pendingCount} item${pendingCount !== 1 ? 's' : ''} still pending`
+  }
+
+  // Generic but human
+  const variants = [
+    `Hey — ${pendingCount} quick thing${pendingCount !== 1 ? 's' : ''} before the day slips by`,
+    `${icon} Your ${orbitName} check-in is waiting (takes 30 sec)`,
+    `5 minutes. That's all today needs. ✦`,
+    `Small actions, big life. Time to check in ${icon}`,
+  ]
+  return variants[Math.floor(Math.random() * variants.length)]
 }
 
 Deno.serve(async (req) => {
@@ -41,206 +127,273 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')!
     const appUrl = Deno.env.get('APP_URL') || 'https://www.orbityours.com'
+    const snoozeBaseUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.functions.supabase.co') + '/snooze-reminder' || ''
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase environment variables')
-    }
-
-    if (!resendApiKey) {
-      throw new Error('Missing RESEND_API_KEY environment variable')
+    if (!supabaseUrl || !supabaseServiceKey || !resendApiKey) {
+      throw new Error('Missing environment variables')
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Check for test mode
     let forceAll = false
     try {
       const body = await req.json()
       if (body?.test === true) forceAll = true
-    } catch {
-      // No body, that's fine
-    }
+    } catch { /* no body */ }
 
-    // Log invocation start
     await supabase.from('function_logs').insert({
       function_name: 'send-reminders',
       status: 'started',
       details: { testMode: forceAll, timestamp: new Date().toISOString() }
     })
 
-    // Get all orbits with email reminders enabled
+    // Fetch all orbits with reminders configured
     const { data: allUsecases, error: fetchError } = await supabase
       .from('usecases')
-      .select('id, name, icon, notify_email, notify_time, timezone, user_id')
+      .select('id, name, icon, notify_email, notify_time, timezone, user_id, snoozed_until')
       .not('notify_email', 'is', null)
+      .is('closed_at', null)
 
-    if (fetchError) {
-      console.error('Error fetching usecases:', fetchError)
-      throw fetchError
-    }
+    if (fetchError) throw fetchError
 
-    // Filter to only orbits whose notify_time matches current hour in USER'S timezone
-    const usecases = forceAll
-      ? allUsecases
-      : (allUsecases as Usecase[])?.filter(uc => {
-          if (!uc.notify_time) return false
+    // Filter to orbits due now (or force all), and not snoozed
+    const now = new Date()
+    const usecases = (allUsecases as Usecase[])?.filter(uc => {
+      // Skip snoozed
+      if (uc.snoozed_until && new Date(uc.snoozed_until) > now) return false
 
-          // Get current hour in user's timezone (default to IST if not set)
-          const userTimezone = uc.timezone || 'Asia/Kolkata'
-          const currentHourInUserTz = getHourInTimezone(userTimezone)
+      if (forceAll) return true
+      if (!uc.notify_time) return false
 
-          const reminderHour = parseInt(uc.notify_time.split(':')[0], 10)
-          console.log(`Orbit "${uc.name}": reminder at ${uc.notify_time}, user timezone: ${userTimezone}, current hour there: ${currentHourInUserTz}`)
+      const userTz = uc.timezone || 'Asia/Kolkata'
+      const currentHour = getHourInTimezone(userTz)
+      const reminderHour = parseInt(uc.notify_time.split(':')[0], 10)
+      return reminderHour === currentHour
+    }) || []
 
-          return reminderHour === currentHourInUserTz
-        })
-
-    if (!usecases || usecases.length === 0) {
+    if (usecases.length === 0) {
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: forceAll ? 'No users with reminders configured' : 'No reminders scheduled for current hour',
-          totalOrbitsWithReminders: allUsecases?.length || 0,
-          sent: 0
-        }),
+        JSON.stringify({ success: true, message: 'No reminders due now', sent: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Group orbits by email
-    const orbitsByEmail: Record<string, Usecase[]> = {}
-    for (const uc of usecases as Usecase[]) {
-      if (!orbitsByEmail[uc.notify_email]) {
-        orbitsByEmail[uc.notify_email] = []
+    // Group by email → user
+    const byEmail: Record<string, { userId: string; timezone: string; orbits: Usecase[] }> = {}
+    for (const uc of usecases) {
+      if (!byEmail[uc.notify_email]) {
+        byEmail[uc.notify_email] = { userId: uc.user_id, timezone: uc.timezone || 'Asia/Kolkata', orbits: [] }
       }
-      orbitsByEmail[uc.notify_email].push(uc)
+      byEmail[uc.notify_email].orbits.push(uc)
     }
 
-    const emails = Object.keys(orbitsByEmail)
-    console.log(`Sending reminders to ${emails.length} users for ${usecases.length} orbits`)
+    // Fetch all checklist items for relevant orbit ids
+    const allOrbitIds = usecases.map(uc => uc.id)
+    const { data: allItems } = await supabase
+      .from('checklist_items')
+      .select('id, usecase_id, label, value_type, frequency')
+      .in('usecase_id', allOrbitIds)
 
-    const results: { email: string; status: string; orbitCount: number; error?: string }[] = []
+    // Fetch today's entries for all relevant users
+    const userIds = [...new Set(usecases.map(uc => uc.user_id))]
+
+    // We need to get entries per user — fetch for each timezone's local date
+    // (simple approach: fetch last 2 days and filter client-side)
+    const twoDaysAgo = new Date()
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
+
+    const { data: recentEntries } = await supabase
+      .from('checkin_entries')
+      .select('checklist_item_id, user_id, date, value')
+      .in('user_id', userIds)
+      .gte('date', twoDaysAgo.toISOString().split('T')[0])
+
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+    const results: { email: string; status: string; subject?: string; error?: string }[] = []
 
-    for (let i = 0; i < emails.length; i++) {
-      const email = emails[i]
+    for (let i = 0; i < Object.keys(byEmail).length; i++) {
+      const email = Object.keys(byEmail)[i]
+      if (i > 0) await sleep(8000)
 
-      if (i > 0) {
-        console.log(`Waiting 10 seconds before next user...`)
-        await sleep(10000)
+      const { userId, timezone, orbits } = byEmail[email]
+      const userTz = timezone || 'Asia/Kolkata'
+      const localDate = getLocalDate(userTz)
+      const yesterday = new Date(localDate)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toISOString().split('T')[0]
+      const hour = getHourInTimezone(userTz)
+      const dayOfWeek = getDayOfWeek(userTz)
+
+      // Entries for this user
+      const userEntries = (recentEntries || []).filter(e => e.user_id === userId)
+      const todayDoneIds = new Set(
+        userEntries
+          .filter(e => e.date === localDate && e.value && e.value !== '' && e.value !== 'false')
+          .map(e => e.checklist_item_id)
+      )
+      const checkedInYesterday = userEntries.some(e => e.date === yesterdayStr)
+
+      // Build pending items per orbit
+      const orbitSections: { orbit: Usecase; pending: ChecklistItem[]; done: number; total: number }[] = []
+      let totalPending = 0
+      let bestStreak = 0
+
+      for (const orbit of orbits) {
+        const orbitItems = (allItems || []).filter(i =>
+          i.usecase_id === orbit.id && isScheduledToday(i.frequency, dayOfWeek)
+        ) as ChecklistItem[]
+
+        const pending = orbitItems.filter(i => !todayDoneIds.has(i.id))
+        const done = orbitItems.length - pending.length
+
+        // Rough streak estimate: count consecutive days with at least one done entry for this orbit
+        const orbitItemIds = new Set(orbitItems.map(i => i.id))
+        let streak = 0
+        for (let d = 0; d < 14; d++) {
+          const checkDate = new Date(localDate)
+          checkDate.setDate(checkDate.getDate() - d)
+          const dateStr = checkDate.toISOString().split('T')[0]
+          const hasDone = userEntries.some(e =>
+            orbitItemIds.has(e.checklist_item_id) && e.date === dateStr && e.value && e.value !== '' && e.value !== 'false'
+          )
+          if (!hasDone) break
+          streak++
+        }
+        if (streak > bestStreak) bestStreak = streak
+
+        if (pending.length > 0) {
+          orbitSections.push({ orbit, pending, done, total: orbitItems.length })
+          totalPending += pending.length
+        }
       }
 
-      const orbits = orbitsByEmail[email]
+      // Skip if everything is already done today
+      if (totalPending === 0) {
+        results.push({ email, status: 'skipped', subject: 'all done' })
+        continue
+      }
 
-      // Greeting based on user's local timezone
-      const userTz = orbits[0]?.timezone || 'Asia/Kolkata'
-      const userHour = getHourInTimezone(userTz)
-      const greeting = userHour >= 17 ? "Evening check-in time"
-        : userHour >= 12 ? "Afternoon check-in time"
-        : userHour >= 5 ? "Morning check-in time"
-        : "Time for your check-in"
+      const subject = buildSubject(orbits, checkedInYesterday, bestStreak, totalPending, hour, dayOfWeek)
 
-      const orbitLinksHtml = orbits.map(uc => `
-        <tr>
-          <td style="padding: 12px 0; border-bottom: 1px solid #1a1a2e;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="width: 50px; font-size: 28px; vertical-align: middle;">
-                  ${uc.icon || '🎯'}
-                </td>
-                <td style="vertical-align: middle;">
-                  <div style="color: #e8e4f0; font-size: 16px; font-weight: 600; margin-bottom: 2px;">
-                    ${uc.name}
-                  </div>
-                </td>
-                <td style="text-align: right; vertical-align: middle;">
-                  <a href="${appUrl}/usecase/${uc.id}"
-                     style="display: inline-block; background: #6c63ff; color: #fff;
-                            padding: 8px 16px; border-radius: 8px; text-decoration: none;
-                            font-size: 13px; font-weight: 500;">
-                    Check in
-                  </a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
+      // Streak badge
+      const streakBadge = bestStreak >= 3
+        ? `<div style="display:inline-block;background:#f59e0b18;border:1px solid #f59e0b44;border-radius:20px;padding:5px 14px;font-size:12px;color:#f59e0b;font-weight:700;margin-bottom:18px;">🔥 ${bestStreak}-day streak</div>`
+        : ''
+
+      // At-risk warning
+      const atRiskBanner = (!checkedInYesterday && bestStreak >= 3)
+        ? `<div style="background:#ef444412;border:1px solid #ef444433;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#ef4444;font-weight:600;">⚠️ Your ${bestStreak}-day streak is at risk — check in today to keep it alive</div>`
+        : ''
+
+      // Orbit sections with pending items
+      const orbitHtml = orbitSections.map(({ orbit, pending, done, total }) => `
+        <div style="margin-bottom:12px;background:#13131f;border:1px solid #1e1e3a;border-radius:14px;overflow:hidden;">
+          <div style="padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1e1e3a;">
+            <span style="font-size:22px;">${orbit.icon || '🎯'}</span>
+            <div style="flex:1;">
+              <div style="font-size:14px;font-weight:700;color:#e8e4f0;">${orbit.name}</div>
+              <div style="font-size:11px;color:#4a4870;margin-top:2px;">${done}/${total} done today</div>
+            </div>
+            ${done > 0
+              ? `<div style="width:40px;height:5px;background:#1e1e3a;border-radius:3px;overflow:hidden;">
+                   <div style="width:${Math.round((done/total)*100)}%;height:100%;background:#22c55e;border-radius:3px;"></div>
+                 </div>`
+              : ''}
+          </div>
+          <div style="padding:8px 0;">
+            ${pending.slice(0, 4).map(item => `
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;">
+                <div style="width:16px;height:16px;border-radius:50%;border:2px solid #2a2a44;flex-shrink:0;"></div>
+                <span style="font-size:13px;color:#a8a4c8;">${item.label}</span>
+              </div>
+            `).join('')}
+            ${pending.length > 4
+              ? `<div style="font-size:11px;color:#4a4870;padding:4px 16px 8px;">+${pending.length - 4} more…</div>`
+              : ''}
+          </div>
+        </div>
       `).join('')
 
-      const emailHtml = `
-<!DOCTYPE html>
+      // Snooze links (only works once SQL column exists)
+      const snooze2h = `${snoozeBaseUrl}?uid=${userId}&hours=2`
+      const snooze4h = `${snoozeBaseUrl}?uid=${userId}&hours=4`
+
+      const emailHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #080810; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #080810; padding: 32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px;">
-          <tr>
-            <td style="padding-bottom: 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td>
-                    <span style="font-size: 22px; font-weight: 700; color: #e8e4f0;">
-                      <span style="color: #6c63ff;">●</span> Orbit
-                    </span>
-                  </td>
-                  <td style="text-align: right; color: #4a4870; font-size: 13px;">
-                    Daily Check-in
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding-bottom: 20px;">
-              <h1 style="color: #e8e4f0; font-size: 20px; font-weight: 600; margin: 0 0 8px 0;">
-                Hey! ${greeting} ✨
-              </h1>
-              <p style="color: #6b6890; font-size: 14px; margin: 0; line-height: 1.5;">
-                ${orbits.length === 1
-                  ? "Here's your orbit for today. Takes 30 seconds."
-                  : `You have ${orbits.length} orbits to check. Takes a minute.`}
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="background-color: #0d0d1a; border-radius: 16px; border: 1px solid #1a1a2e; padding: 8px 20px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                ${orbitLinksHtml}
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding-top: 20px; text-align: center;">
-              <a href="${appUrl}/dashboard"
-                 style="color: #6c63ff; font-size: 13px; text-decoration: none;">
-                Open Dashboard →
-              </a>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding-top: 32px; text-align: center;">
-              <p style="color: #3a3858; font-size: 11px; margin: 0;">
-                You're receiving this because you enabled reminders.<br>
-                Edit your orbit to change notification settings.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+<body style="margin:0;padding:0;background:#080810;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#080810;padding:28px 16px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;">
+
+  <!-- Logo -->
+  <tr><td style="padding-bottom:20px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td><span style="font-size:16px;font-weight:700;color:#e8e4f0;"><span style="color:#6c63ff;">●</span> Orbit</span></td>
+        <td style="text-align:right;"><span style="font-size:11px;color:#3a3858;text-transform:uppercase;letter-spacing:0.5px;">Daily Check-in</span></td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Streak badge + at-risk banner -->
+  <tr><td>
+    ${streakBadge}
+    ${atRiskBanner}
+  </td></tr>
+
+  <!-- Headline -->
+  <tr><td style="padding-bottom:20px;">
+    <p style="font-size:20px;font-weight:800;color:#e8e4f0;margin:0 0 6px 0;line-height:1.3;">
+      ${totalPending} thing${totalPending !== 1 ? 's' : ''} waiting for you today
+    </p>
+    <p style="font-size:13px;color:#4a4870;margin:0;line-height:1.5;">
+      Takes about ${totalPending <= 3 ? '30 seconds' : totalPending <= 6 ? 'a minute' : '2–3 minutes'} to tick off.
+    </p>
+  </td></tr>
+
+  <!-- Orbit sections -->
+  <tr><td style="padding-bottom:20px;">
+    ${orbitHtml}
+  </td></tr>
+
+  <!-- Primary CTA -->
+  <tr><td style="padding-bottom:24px;text-align:center;">
+    <a href="${appUrl}/quick-checkin"
+       style="display:inline-block;background:#6c63ff;color:#fff;padding:15px 36px;border-radius:12px;text-decoration:none;font-size:15px;font-weight:700;letter-spacing:0.1px;">
+      Check in now ✦
+    </a>
+  </td></tr>
+
+  <!-- Snooze -->
+  <tr><td style="padding-bottom:28px;text-align:center;">
+    <span style="font-size:12px;color:#3a3858;">Not now? </span>
+    <a href="${snooze2h}" style="font-size:12px;color:#6c63ff;text-decoration:none;">Remind me in 2h</a>
+    <span style="font-size:12px;color:#3a3858;"> · </span>
+    <a href="${snooze4h}" style="font-size:12px;color:#6c63ff;text-decoration:none;">4h</a>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="border-top:1px solid #12122a;padding-top:20px;text-align:center;">
+    <p style="font-size:11px;color:#3a3858;margin:0;line-height:1.7;">
+      You're getting this because you enabled reminders in Orbit.<br>
+      <a href="${appUrl}/dashboard" style="color:#4a4870;text-decoration:none;">Edit notification settings →</a>
+    </p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
 </body>
-</html>
-      `.trim()
+</html>`
 
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -252,54 +405,34 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             from: 'Orbit <reminders@orbityours.com>',
             to: email,
-            subject: orbits.length === 1
-              ? `${orbits[0].icon || '○'} Reminder: ${orbits[0].name}`
-              : `○ Check-in reminder · ${orbits.length} orbits`,
+            subject,
             html: emailHtml,
           }),
         })
 
         const responseData = await response.json()
-
         if (!response.ok) {
-          console.error(`Failed to send to ${email}:`, responseData)
-          results.push({ email, status: 'failed', orbitCount: orbits.length, error: responseData.message })
+          results.push({ email, status: 'failed', subject, error: responseData.message })
         } else {
-          console.log(`✓ Sent to ${email} (${orbits.length} orbits)`)
-          results.push({ email, status: 'sent', orbitCount: orbits.length })
+          results.push({ email, status: 'sent', subject })
         }
-      } catch (emailError) {
-        console.error(`Error sending to ${email}:`, emailError)
-        results.push({ email, status: 'error', orbitCount: orbits.length, error: String(emailError) })
+      } catch (err) {
+        results.push({ email, status: 'error', error: String(err) })
       }
     }
 
     const sent = results.filter(r => r.status === 'sent').length
-    const failed = results.filter(r => r.status !== 'sent').length
+    const skipped = results.filter(r => r.status === 'skipped').length
+    const failed = results.filter(r => r.status !== 'sent' && r.status !== 'skipped').length
 
-    // Log success
     await supabase.from('function_logs').insert({
       function_name: 'send-reminders',
       status: 'success',
-      details: {
-        testMode: forceAll,
-        totalOrbitsWithReminders: allUsecases?.length || 0,
-        orbitsMatchingTime: usecases.length,
-        sent,
-        failed
-      }
+      details: { testMode: forceAll, sent, skipped, failed }
     })
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        testMode: forceAll,
-        totalOrbitsWithReminders: allUsecases?.length || 0,
-        orbitsMatchingTime: usecases.length,
-        usersNotified: sent,
-        failed,
-        results,
-      }),
+      JSON.stringify({ success: true, sent, skipped, failed, results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
