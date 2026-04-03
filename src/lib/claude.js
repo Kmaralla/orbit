@@ -91,6 +91,48 @@ Respond ONLY with valid JSON, no markdown fences:
   }
 }
 
+export async function getCheckinInsight(orbit, items, recentEntries) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+  if (!apiKey) return null
+
+  const summary = items.map(item => {
+    const itemEntries = recentEntries.filter(e => e.checklist_item_id === item.id)
+    const done = itemEntries.filter(e => e.value && e.value !== '' && e.value !== 'false')
+    const values = done.slice(-7).map(e => `${e.date}: ${e.value}`).join(', ')
+    return `- ${item.label} (${item.value_type}): done ${done.length} times recently. Last 7: ${values || 'no data'}`
+  }).join('\n')
+
+  const prompt = `You are a warm personal coach. Someone just completed their daily check-in for "${orbit.name}".${orbit.goal_statement ? ` Their goal: "${orbit.goal_statement}".` : ''}
+
+Their last 14 days of data:
+${summary}
+
+Write exactly 2 sentences:
+1. One specific observation about a pattern you see in their data (reference actual numbers/trends)
+2. One short encouraging forward-looking statement
+
+Be human, warm, specific. No generic praise. No bullet points. Just 2 natural sentences.`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  const data = await res.json()
+  if (data.error) return null
+  return data.content?.find(b => b.type === 'text')?.text?.trim() || null
+}
+
 export async function getOrganizeSuggestions(orbits, completionData) {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
   if (!apiKey) return null

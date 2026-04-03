@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { playCheckSound, playLogSound } from '../lib/sounds'
+import { getCheckinInsight } from '../lib/claude'
+import MilestoneCelebration, { getMilestoneKey } from '../components/MilestoneCelebration'
 import Navbar from '../components/Navbar'
 
 const VALUE_TYPES = [
@@ -48,6 +50,10 @@ export default function Usecase() {
   const [toast, setToast] = useState(null) // { message, emoji, type }
   const [glowItem, setGlowItem] = useState(null) // itemId with active glow
   const [celebratedItems] = useState(new Set())
+  const [insight, setInsight] = useState(null)
+  const [insightLoading, setInsightLoading] = useState(false)
+  const [milestone, setMilestone] = useState(null) // { key, stats }
+  const [markingAllDone, setMarkingAllDone] = useState(false)
   const today = new Date().toISOString().split('T')[0]
 
   const CHECKBOX_NUDGES = [
@@ -123,6 +129,48 @@ export default function Usecase() {
     const map = {}
     entries?.forEach(e => { map[e.checklist_item_id] = e })
     setTodayEntries(map)
+
+    // Milestone detection — fetch last 60 days of entries for this orbit
+    const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const { data: recentEntries } = await supabase
+      .from('checkin_entries')
+      .select('date, value, checklist_item_id')
+      .eq('user_id', user.id)
+      .in('checklist_item_id', (its || []).map(i => i.id))
+      .gte('date', sixtyDaysAgo.toISOString().split('T')[0])
+
+    const doneDates = new Set(
+      (recentEntries || [])
+        .filter(e => e.value && e.value !== '' && e.value !== 'false')
+        .map(e => e.date)
+    )
+    const totalActiveDays = doneDates.size
+
+    // Calculate current streak
+    let currentStreak = 0
+    for (let d = 0; d < 60; d++) {
+      const checkDate = new Date(); checkDate.setDate(checkDate.getDate() - d)
+      const dateStr = checkDate.toISOString().split('T')[0]
+      if (doneDates.has(dateStr)) { currentStreak++ } else if (d > 0) break
+    }
+
+    const milestoneKey = getMilestoneKey(totalActiveDays, currentStreak)
+    if (milestoneKey) {
+      const shownKey = `orbit_milestones_${id}`
+      const shown = JSON.parse(localStorage.getItem(shownKey) || '[]')
+      if (!shown.includes(milestoneKey)) {
+        setMilestone({
+          key: milestoneKey,
+          stats: [
+            { label: 'Days logged', value: totalActiveDays },
+            { label: 'Streak', value: `${currentStreak}d` },
+            { label: 'Tasks', value: (its || []).length },
+          ],
+        })
+        localStorage.setItem(shownKey, JSON.stringify([...shown, milestoneKey]))
+      }
+    }
+
     setLoading(false)
   }
 
@@ -149,6 +197,41 @@ export default function Usecase() {
       const meaningful = valueType === 'checkbox' ? value === true : String(value).trim() !== ''
       if (meaningful) triggerNudge(itemId, valueType)
     }
+  }
+
+  // Trigger AI insight when all today's items are done
+  useEffect(() => {
+    const todayScheduled = items.filter(shouldShowToday)
+    const completed = todayScheduled.filter(i => {
+      const v = todayEntries[i.id]?.value
+      return v !== undefined && v !== '' && v !== 'false'
+    })
+    if (!loading && todayScheduled.length > 0 && completed.length === todayScheduled.length && !insight && !insightLoading) {
+      fetchInsight(todayScheduled)
+    }
+  }, [todayEntries, loading, items])
+
+  const fetchInsight = async (todayScheduled) => {
+    setInsightLoading(true)
+    const sixteenDaysAgo = new Date(); sixteenDaysAgo.setDate(sixteenDaysAgo.getDate() - 14)
+    const { data: recent } = await supabase
+      .from('checkin_entries')
+      .select('checklist_item_id, date, value')
+      .eq('user_id', user.id)
+      .in('checklist_item_id', todayScheduled.map(i => i.id))
+      .gte('date', sixteenDaysAgo.toISOString().split('T')[0])
+    const text = await getCheckinInsight(usecase, todayScheduled, recent || [])
+    setInsight(text)
+    setInsightLoading(false)
+  }
+
+  const markAllDone = async () => {
+    setMarkingAllDone(true)
+    const checkboxItems = todayItems.filter(i => i.value_type === 'checkbox' && todayEntries[i.id]?.value !== 'true')
+    for (const item of checkboxItems) {
+      await saveEntry(item.id, true, 'checkbox')
+    }
+    setMarkingAllDone(false)
   }
 
   const toggleCustomDay = (day) => {
@@ -421,6 +504,14 @@ export default function Usecase() {
 
   return (
     <div style={s.page}>
+      {milestone && (
+        <MilestoneCelebration
+          milestoneKey={milestone.key}
+          orbitName={usecase?.name}
+          stats={milestone.stats}
+          onClose={() => setMilestone(null)}
+        />
+      )}
       <Navbar />
       <div style={s.content}>
         <button style={s.back} onClick={() => navigate('/dashboard')}>← Back to Dashboard</button>
@@ -606,10 +697,50 @@ export default function Usecase() {
           ))
         )}
 
+        {/* Mark all done — one tap for busy days */}
+        {todayItems.some(i => i.value_type === 'checkbox' && todayEntries[i.id]?.value !== 'true') && todayItems.length > 1 && (
+          <button
+            onClick={markAllDone}
+            disabled={markingAllDone}
+            style={{
+              width: '100%', marginTop: 8, marginBottom: 4,
+              background: 'transparent',
+              border: `1px dashed ${colors.border}`,
+              borderRadius: 12, padding: '10px',
+              color: colors.textDim, fontSize: 13,
+              cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.color = colors.accent }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textDim }}
+          >
+            {markingAllDone ? 'Marking done…' : '✓ I showed up — mark all done'}
+          </button>
+        )}
+
         {/* Drag hint — only when 2+ items and not currently dragging */}
         {todayItems.length >= 2 && !draggedItem && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, marginBottom: 4, opacity: 0.45 }}>
             <span style={{ fontSize: 12, color: colors.textDim, userSelect: 'none' }}>⠿⠿ drag to reorder</span>
+          </div>
+        )}
+
+        {/* AI post-check-in insight */}
+        {insightLoading && (
+          <div style={{ marginTop: 20, padding: '16px', borderRadius: 14, background: colors.accent + '0a', border: `1px solid ${colors.accent}22`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 16, height: 16, border: `2px solid ${colors.accent}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: colors.textDim, fontStyle: 'italic' }}>Reading your patterns…</span>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
+        {insight && !insightLoading && (
+          <div style={{ marginTop: 20, padding: '18px 20px', borderRadius: 14, background: `linear-gradient(135deg, ${colors.accent}0d, ${colors.accent}06)`, border: `1px solid ${colors.accent}33` }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.8px', textTransform: 'uppercase', color: colors.accent, marginBottom: 8 }}>
+              ✦ Today's insight
+            </div>
+            <p style={{ fontSize: 14, color: colors.text, lineHeight: 1.65, margin: 0, fontStyle: 'italic' }}>
+              "{insight}"
+            </p>
           </div>
         )}
 
