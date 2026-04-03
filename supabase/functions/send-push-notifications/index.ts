@@ -293,7 +293,7 @@ Deno.serve(async (req) => {
         icon: '/icon-192.png',
         badge: '/icon-192.png',
         tag: 'orbit-checkin',
-        data: { url: '/quick-checkin' }
+        data: { url: '/quick-checkin', userId }
       })
 
       // Send to all user's devices

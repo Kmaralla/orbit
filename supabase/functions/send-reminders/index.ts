@@ -140,9 +140,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     let forceAll = false
+    let testEmail: string | null = null
     try {
       const body = await req.json()
       if (body?.test === true) forceAll = true
+      if (body?.testEmail) testEmail = body.testEmail
     } catch { /* no body */ }
 
     await supabase.from('function_logs').insert({
@@ -160,9 +162,12 @@ Deno.serve(async (req) => {
 
     if (fetchError) throw fetchError
 
-    // Filter to orbits due now (or force all), and not snoozed
+    // Filter to orbits due now (or force all / testEmail), and not snoozed
     const now = new Date()
     const usecases = (allUsecases as Usecase[])?.filter(uc => {
+      // testEmail mode: only include orbits for that specific email, ignore time/snooze
+      if (testEmail) return uc.notify_email === testEmail
+
       // Skip snoozed
       if (uc.snoozed_until && new Date(uc.snoozed_until) > now) return false
 
@@ -404,8 +409,8 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             from: 'Orbit <reminders@orbityours.com>',
-            to: email,
-            subject,
+            to: testEmail || email,
+            subject: testEmail ? `[TEST] ${subject}` : subject,
             html: emailHtml,
           }),
         })

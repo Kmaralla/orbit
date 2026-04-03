@@ -42,7 +42,7 @@ self.addEventListener('push', (event) => {
     data: data.data || { url: '/quick-checkin' },
     actions: [
       { action: 'checkin', title: '✓ Check In Now' },
-      { action: 'snooze', title: '⏰ Snooze 30min' }
+      { action: 'snooze', title: '⏰ Snooze 2h' }
     ]
   }
 
@@ -58,8 +58,12 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
   if (event.action === 'snooze') {
-    // Schedule another notification in 30 minutes
-    // (This would need backend support, for now just close)
+    // Call snooze endpoint silently — no page open, no redirect
+    const userId = event.notification.data?.userId
+    if (userId) {
+      const snoozeUrl = `https://aeuvwynwyrlrtgkrujts.functions.supabase.co/snooze-reminder?uid=${userId}&hours=2`
+      event.waitUntil(fetch(snoozeUrl).catch(() => {}))
+    }
     return
   }
 
