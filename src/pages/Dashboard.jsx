@@ -1260,12 +1260,25 @@ export default function Dashboard() {
                       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: uc.goal_achieved ? '#22c55e' : colors.border, borderRadius: '20px 20px 0 0' }} />
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 8 }}>
                         <span style={{ fontSize: 28 }}>{uc.icon}</span>
-                        <div>
+                        <div style={{ flex: 1 }}>
                           <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: colors.textMuted }}>{uc.name}</div>
                           <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2 }}>
                             {uc.goal_achieved ? '🏆 Goal achieved' : '🌱 Closed'} · {new Date(uc.closed_at).toLocaleDateString()}
                           </div>
                         </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Delete "${uc.name}" permanently? This removes all check-in history too.`)) return
+                            await supabase.from('usecases').delete().eq('id', uc.id)
+                            setUsecases(prev => prev.filter(u => u.id !== uc.id))
+                          }}
+                          style={{ background: 'none', border: `1px solid ${colors.border}`, borderRadius: 8, padding: '5px 10px', color: colors.textDim, fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#ef4444' }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textDim }}
+                          title="Permanently delete this orbit"
+                        >
+                          Delete
+                        </button>
                       </div>
                       {uc.description && <div style={{ fontSize: 12, color: colors.textDim, marginBottom: 8 }}>{uc.description}</div>}
                     </div>
@@ -1344,7 +1357,7 @@ export default function Dashboard() {
 
       {showBuildDay && (
         <BuildDay
-          orbits={usecases}
+          orbits={usecases.filter(uc => !uc.closed_at)}
           userId={user.id}
           onClose={() => { setShowBuildDay(false); loadTodayPlan() }}
           onPlanSaved={loadTodayPlan}
