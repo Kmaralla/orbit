@@ -12,6 +12,9 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
   const [orbitsWithTasks, setOrbitsWithTasks] = useState(null)
   const [selectedTasks, setSelectedTasks] = useState(new Set())
   const [expandedOrbits, setExpandedOrbits] = useState(new Set())
+  const [sideQuests, setSideQuests] = useState([])
+  const [selectedQuests, setSelectedQuests] = useState(new Set())
+  const [questsExpanded, setQuestsExpanded] = useState(false)
   const [plan, setPlan] = useState(null)
   const [planItems, setPlanItems] = useState({})
   const [dayEntries, setDayEntries] = useState({})
@@ -73,6 +76,15 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
 
     setOrbitsWithTasks(enriched)
 
+    // Fetch active side quests
+    const { data: quests } = await supabase
+      .from('side_quests')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('completed', false)
+      .order('created_at', { ascending: false })
+    setSideQuests(quests || [])
+
     // Smart pre-selection: at-risk streaks first, then high-streak incomplete tasks
     const preSelected = new Set()
     for (const orbit of enriched) {
@@ -124,8 +136,16 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
     })
   }
 
+  const toggleQuest = (questId) => {
+    setSelectedQuests(prev => {
+      const next = new Set(prev)
+      next.has(questId) ? next.delete(questId) : next.add(questId)
+      return next
+    })
+  }
+
   const lockInPlan = () => {
-    if (!orbitsWithTasks || selectedTasks.size === 0) return
+    if (!orbitsWithTasks || (selectedTasks.size === 0 && selectedQuests.size === 0)) return
 
     const builtPlan = orbitsWithTasks.map(orbit => {
       const chosenTasks = orbit.tasks.filter(t => selectedTasks.has(t.id))
@@ -142,6 +162,7 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
 
     const items = {}
     for (const planOrbit of builtPlan) {
+      if (planOrbit.orbitId === '__sidequests__') continue
       const orbitData = orbitsWithTasks.find(o => o.id === planOrbit.orbitId)
       items[planOrbit.orbitId] = orbitData.tasks.filter(t => selectedTasks.has(t.id))
     }
@@ -153,8 +174,29 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
       }
     }
 
-    const orbitCount = builtPlan.length
-    const summary = `${selectedTasks.size} task${selectedTasks.size !== 1 ? 's' : ''} across ${orbitCount} orbit${orbitCount !== 1 ? 's' : ''}`
+    // Add side quests as a special plan entry
+    const chosenQuests = sideQuests.filter(q => selectedQuests.has(q.id))
+    if (chosenQuests.length > 0) {
+      builtPlan.push({
+        orbitId: '__sidequests__',
+        orbitName: 'Side Quests',
+        orbitIcon: '☄️',
+        priority: 'medium',
+        tasks: chosenQuests.map(q => q.title),
+        reason: 'One-time tasks you picked for today',
+        questIds: chosenQuests.map(q => q.id),
+      })
+      items['__sidequests__'] = chosenQuests.map(q => ({ id: q.id, label: q.title, value_type: 'checkbox', isSideQuest: true }))
+    }
+
+    const orbitCount = builtPlan.filter(p => p.orbitId !== '__sidequests__').length
+    const questCount = selectedQuests.size
+    const taskTotal = selectedTasks.size + questCount
+    const summary = [
+      taskTotal > 0 ? `${taskTotal} task${taskTotal !== 1 ? 's' : ''}` : '',
+      orbitCount > 0 ? `${orbitCount} orbit${orbitCount !== 1 ? 's' : ''}` : '',
+      questCount > 0 ? `${questCount} side quest${questCount !== 1 ? 's' : ''}` : '',
+    ].filter(Boolean).join(' · ')
 
     setPlan({ plan: builtPlan, greeting: 'Your plan is locked in. Let\'s do this.', summary })
     setPlanItems(items)
@@ -168,11 +210,19 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
     setPhase('plan')
   }
 
-  const saveEntry = async (itemId, value, valueType) => {
+  const saveEntry = async (itemId, value, valueType, isSideQuest = false) => {
     setSaving(prev => ({ ...prev, [itemId]: true }))
-    await supabase.from('checkin_entries').upsert({
-      checklist_item_id: itemId, user_id: userId, date: today, value: String(value),
-    }, { onConflict: 'checklist_item_id,user_id,date' })
+
+    if (isSideQuest) {
+      // Mark side quest complete in side_quests table
+      if (value === true || value === 'true') {
+        await supabase.from('side_quests').update({ completed: true, completed_at: new Date().toISOString() }).eq('id', itemId)
+      }
+    } else {
+      await supabase.from('checkin_entries').upsert({
+        checklist_item_id: itemId, user_id: userId, date: today, value: String(value),
+      }, { onConflict: 'checklist_item_id,user_id,date' })
+    }
     const newEntries = { ...dayEntries, [itemId]: String(value) }
     setDayEntries(newEntries)
     setSaving(prev => ({ ...prev, [itemId]: false }))
@@ -268,7 +318,7 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
                         <div style={{ flex: 1, fontSize: 13, color: done ? colors.textDim : colors.text, textDecoration: done ? 'line-through' : 'none' }}>{item.label}</div>
                         {saving[item.id] && <span style={{ fontSize: 10, color: colors.accent }}>•••</span>}
                         {item.value_type === 'checkbox' && (
-                          <button onClick={() => saveEntry(item.id, !done, 'checkbox')} style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${done ? '#22c55e' : pc.label}`, background: done ? '#22c55e' : 'transparent', color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>{done ? '✓' : ''}</button>
+                          <button onClick={() => saveEntry(item.id, !done, 'checkbox', item.isSideQuest)} style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${done ? '#22c55e' : pc.label}`, background: done ? '#22c55e' : 'transparent', color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>{done ? '✓' : ''}</button>
                         )}
                         {item.value_type === 'score' && (
                           <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
@@ -422,12 +472,55 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
               )
             })
           )}
+          {/* Side Quests accordion */}
+          {sideQuests.length > 0 && (
+            <div style={{ marginTop: 8, border: `1px solid ${colors.accent}44`, borderRadius: 14, overflow: 'hidden' }}>
+              <div
+                onClick={() => setQuestsExpanded(e => !e)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', background: questsExpanded ? colors.bg : colors.bgCard, userSelect: 'none' }}
+              >
+                <span style={{ fontSize: 20, flexShrink: 0 }}>☄️</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: colors.text }}>Side Quests</div>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>{sideQuests.length} open · pick any to tackle today</div>
+                </div>
+                {selectedQuests.size > 0 && (
+                  <span style={{ background: colors.accent, color: '#fff', borderRadius: 20, padding: '2px 9px', fontSize: 11, fontWeight: 800 }}>
+                    {selectedQuests.size} picked
+                  </span>
+                )}
+                <span style={{ color: colors.textDim, fontSize: 14, transition: 'transform 0.2s', transform: questsExpanded ? 'rotate(180deg)' : 'rotate(0)', flexShrink: 0 }}>▾</span>
+              </div>
+
+              {questsExpanded && (
+                <div style={{ borderTop: `1px solid ${colors.border}` }}>
+                  {sideQuests.map(quest => {
+                    const isSelected = selectedQuests.has(quest.id)
+                    return (
+                      <div
+                        key={quest.id}
+                        onClick={() => toggleQuest(quest.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: `1px solid ${colors.border}`, background: isSelected ? colors.accent + '0d' : 'transparent', cursor: 'pointer', transition: 'background 0.15s' }}
+                      >
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2px solid ${isSelected ? colors.accent : colors.border}`, background: isSelected ? colors.accent : 'transparent', color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                          {isSelected ? '✓' : ''}
+                        </div>
+                        <span style={{ flex: 1, fontSize: 13, fontFamily: 'Nunito, sans-serif', fontWeight: 600, color: colors.text }}>
+                          {quest.title}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={s.footer}>
-          {totalSelected > 0 ? (
+          {(totalSelected > 0 || selectedQuests.size > 0) ? (
             <button style={s.lockBtn} onClick={lockInPlan}>
-              Lock in {totalSelected} task{totalSelected !== 1 ? 's' : ''} →
+              Lock in {totalSelected + selectedQuests.size} item{(totalSelected + selectedQuests.size) !== 1 ? 's' : ''} →
             </button>
           ) : (
             <button style={{ ...s.lockBtn, opacity: 0.4, cursor: 'not-allowed' }} disabled>
