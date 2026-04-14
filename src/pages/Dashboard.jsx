@@ -20,6 +20,9 @@ import { playCheckSound, playLogSound } from '../lib/sounds'
 
 const ICONS = ['👴', '👧', '💼', '🧘', '💪', '📚', '❤️', '🎯', '🌱', '🏠', '✈️', '🎨']
 
+// Always use local date — toISOString() returns UTC which breaks for EST/IST users late at night
+const getLocalToday = () => new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]
+
 export default function Dashboard() {
   const { user } = useAuth()
   const { colors } = useTheme()
@@ -114,7 +117,7 @@ export default function Dashboard() {
     setActivityTotalItems(items?.length || 0)
 
     // Calculate today's counts
-    const today = new Date().toISOString().split('T')[0]
+    const today = getLocalToday()
     const counts = {}
     allEntries?.filter(e => e.date === today).forEach(e => {
       const uid = e.checklist_items?.usecase_id
@@ -210,7 +213,7 @@ export default function Dashboard() {
 
   const loadTodayPlan = (activeUsecases) => {
     if (!user?.id) return
-    const today = new Date().toISOString().split('T')[0]
+    const today = getLocalToday()
     try {
       const raw = localStorage.getItem(`orbit_today_plan_${user.id}`)
       if (!raw) return
@@ -241,7 +244,7 @@ export default function Dashboard() {
 
   const savePlanEntry = async (itemId, value, valueType) => {
     setPlanSaving(prev => ({ ...prev, [itemId]: true }))
-    const today = new Date().toISOString().split('T')[0]
+    const today = getLocalToday()
     await supabase.from('checkin_entries').upsert({
       checklist_item_id: itemId,
       user_id: user.id,
@@ -1118,7 +1121,7 @@ export default function Dashboard() {
           )}
           <div style={s.grid}>
             {usecases.filter(uc => !uc.closed_at).map(uc => {
-              const today = new Date().toISOString().split('T')[0]
+              const today = getLocalToday()
               const isExpired = uc.end_date && uc.end_date < today
               const daysLeft = uc.end_date && !isExpired
                 ? Math.ceil((new Date(uc.end_date) - new Date(today)) / (1000 * 60 * 60 * 24))

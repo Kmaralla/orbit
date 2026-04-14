@@ -54,7 +54,8 @@ export default function Usecase() {
   const [insightLoading, setInsightLoading] = useState(false)
   const [milestone, setMilestone] = useState(null) // { key, stats }
   const [markingAllDone, setMarkingAllDone] = useState(false)
-  const today = new Date().toISOString().split('T')[0]
+  // Use local date, not UTC — toISOString() shifts to UTC and breaks for users in EST/IST after certain hours
+  const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]
 
   const CHECKBOX_NUDGES = [
     { emoji: '🔥', text: 'Done!' },
@@ -146,11 +147,12 @@ export default function Usecase() {
     )
     const totalActiveDays = doneDates.size
 
-    // Calculate current streak
+    // Calculate current streak — use local date to avoid UTC shift
+    const toLocalDateStr = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]
     let currentStreak = 0
     for (let d = 0; d < 60; d++) {
       const checkDate = new Date(); checkDate.setDate(checkDate.getDate() - d)
-      const dateStr = checkDate.toISOString().split('T')[0]
+      const dateStr = toLocalDateStr(checkDate)
       if (doneDates.has(dateStr)) { currentStreak++ } else if (d > 0) break
     }
 

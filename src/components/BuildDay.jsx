@@ -20,7 +20,7 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
   const [dayEntries, setDayEntries] = useState({})
   const [saving, setSaving] = useState({})
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]
   const todayDayOfWeek = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date().getDay()]
 
   useEffect(() => { fetchTodayData() }, [])
