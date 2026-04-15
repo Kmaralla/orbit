@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { usePushNotifications } from '../hooks/usePushNotifications'
-import { calculateStreak, getStreakDisplay, calculatePriority } from '../lib/streaks'
+import { calculateStreak, getStreakDisplay } from '../lib/streaks'
+import { scoreFocusCandidates, buildFocusNarrative } from '../lib/focusEngine'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 import EditOrbit from '../components/EditOrbit'
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [orbitStreaks, setOrbitStreaks] = useState({}) // { orbitId: { current, best, atRisk } }
   const [orbitItemCounts, setOrbitItemCounts] = useState({}) // { orbitId: number }
   const [topFocus, setTopFocus] = useState([]) // Top 3 priority items
+  const [focusNarrative, setFocusNarrative] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
   const [remindersEnabled, setRemindersEnabled] = useState(false)
   const [togglingReminder, setTogglingReminder] = useState(false)
@@ -148,16 +150,8 @@ export default function Dashboard() {
           totalAtRisk++
         }
 
-        // Calculate priority for top 3 focus
-        const lastEntry = itemEntries.find(e => e.date === today)
-        const priority = calculatePriority(item, streak, lastEntry)
-        itemPriorities.push({
-          item,
-          orbit,
-          streak,
-          priority,
-          lastEntry
-        })
+        // Collect candidates for smart focus engine
+        itemPriorities.push({ item, orbit, streak, itemEntries, today })
       }
 
       streaks[orbit.id] = {
@@ -176,13 +170,11 @@ export default function Dashboard() {
     }
     setOrbitItemCounts(itemCounts)
 
-    // Get top 3 focus items (not completed today, highest priority)
-    const uncompleted = itemPriorities
-      .filter(p => !p.lastEntry || p.lastEntry.value === '' || p.lastEntry.value === 'false')
-      .sort((a, b) => b.priority - a.priority)
-      .slice(0, 3)
-
-    setTopFocus(uncompleted)
+    // Smart focus engine — scores by intent, behavior, momentum, absence
+    const smartFocus = scoreFocusCandidates(itemPriorities)
+    const narrative = buildFocusNarrative(smartFocus)
+    setTopFocus(smartFocus)
+    setFocusNarrative(narrative)
     setLoading(false)
 
     // Re-validate today's plan against current orbits (clears stale deleted-orbit tasks)
@@ -690,7 +682,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Top Focus Section - show fewer on mobile */}
+        {/* Today's Focus — smart, narrative-driven */}
         {!loading && topFocus.length > 0 && (
           <div style={s.focusSection}>
             <div style={s.focusTitle}>
@@ -701,11 +693,33 @@ export default function Dashboard() {
                 onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${colors.accent}44, ${colors.accent}66)`; e.currentTarget.style.boxShadow = `0 0 16px ${colors.accent}44` }}
                 onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${colors.accent}22, ${colors.accent}44)`; e.currentTarget.style.boxShadow = `0 0 10px ${colors.accent}22` }}
               >
-                <span style={{ fontSize: 14 }}>📊</span> Overall Stats
+                <span style={{ fontSize: 14 }}>📊</span> Stats
               </button>
             </div>
+
+            {/* Narrative — the human context for why these tasks matter today */}
+            {focusNarrative && (
+              <div style={{
+                fontSize: 13,
+                color: colors.textDim,
+                lineHeight: 1.65,
+                marginBottom: 16,
+                padding: '10px 14px',
+                background: colors.accent + '10',
+                borderRadius: 10,
+                borderLeft: `3px solid ${colors.accent}`,
+              }}>
+                {focusNarrative}
+              </div>
+            )}
+
             {topFocus.slice(0, isMobile ? 2 : 3).map((focus, idx, arr) => {
-              const streakDisplay = getStreakDisplay(focus.streak)
+              // Urgency → color
+              const urgencyColor = focus.urgency === 'critical' ? '#ef4444'
+                : focus.urgency === 'high' ? '#f59e0b'
+                : focus.urgency === 'medium' ? '#8b83ff'
+                : colors.accent
+
               return (
                 <div
                   key={focus.item.id}
@@ -714,25 +728,37 @@ export default function Dashboard() {
                     ...(idx === arr.length - 1 ? s.focusItemLast : {})
                   }}
                 >
-                  <div style={s.focusRank}>{idx + 1}</div>
+                  {/* Color-coded urgency dot instead of numbered circle */}
+                  <div style={{
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: urgencyColor,
+                    flexShrink: 0,
+                    boxShadow: `0 0 6px ${urgencyColor}88`,
+                  }} />
+
                   <div style={s.focusContent}>
                     <div style={s.focusLabel}>{focus.item.label}</div>
-                    <div style={s.focusOrbit}>
-                      {focus.orbit.icon} {focus.orbit.name}
-                      {focus.streak.atRisk && (
-                        <span style={{ color: '#f59e0b', marginLeft: 8 }}>⚠️ Streak at risk!</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+                      <span style={s.focusOrbit}>{focus.orbit.icon} {focus.orbit.name}</span>
+                      {focus.reasonLabel && (
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: urgencyColor,
+                          background: urgencyColor + '18',
+                          padding: '2px 7px',
+                          borderRadius: 5,
+                        }}>
+                          {focus.reason === 'protect'  ? '⚠️ ' : ''}
+                          {focus.reason === 'reengage' ? '↩ ' : ''}
+                          {focus.reason === 'dormant'  ? '💤 ' : ''}
+                          {focus.reason === 'begin'    ? '▶ ' : ''}
+                          {focus.reasonLabel}
+                        </span>
                       )}
                     </div>
                   </div>
-                  {focus.streak.current > 0 && (
-                    <div style={{
-                      ...s.focusStreak,
-                      background: streakDisplay.color + '22',
-                      color: streakDisplay.color
-                    }}>
-                      {streakDisplay.emoji} {focus.streak.current} days
-                    </div>
-                  )}
+
                   <button
                     style={s.focusBtn}
                     onClick={() => navigate(`/usecase/${focus.orbit.id}`)}
