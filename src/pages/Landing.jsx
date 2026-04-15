@@ -29,7 +29,7 @@ const TYPEWRITER_DEMO = [
 ]
 
 export default function Landing() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { colors, theme, toggleTheme, bgColor, setBgColor } = useTheme()
   const navigate = useNavigate()
   const [mode, setMode] = useState('login')
@@ -82,6 +82,13 @@ export default function Landing() {
     }
   }, [typewriterIndex, currentLine])
 
+  // Wait for session check before rendering anything — prevents login flash for returning users
+  if (authLoading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#080810' }}>
+      <div style={{ width: 36, height: 36, border: '2px solid #6c63ff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
   if (user) { navigate('/dashboard'); return null }
 
   const handleGoogleLogin = async () => {
