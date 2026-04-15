@@ -98,7 +98,7 @@ User segment: ${segment}
 
 Return ONLY valid JSON — no markdown, no extra text:
 {
-  "subject": "email subject, all lowercase, no emoji, max 8 words, sounds like a message from a real person not a system notification",
+  "subject": "email subject line, sentence case (capitalize first word), max 9 words, punchy and specific — use actual numbers or orbit names if possible. Examples of good styles: 'You showed up 5 days last week', 'Your streak is real — keep it going', 'One habit slipped. Here is how to fix it', 'Dad's Health is on a 12-day streak'. No generic phrases like 'weekly summary' or 'check in'. Make them want to open it.",
   "openingLine": "2 sentences max. Direct observation about their week. Name their best or most active orbit if possible.",
   "winLine": "1 sentence. Specific praise. Call out actual numbers or orbit names.",
   "watchLine": "1 sentence. What slipped or what needs watching. Honest but not harsh.",
@@ -329,8 +329,9 @@ Deno.serve(async (req) => {
     const targetEmail = url.searchParams.get('email')
 
     // Get users from auth
-    const { data: { users }, error: usersErr } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-    if (usersErr) throw usersErr
+    const listResult = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    if (listResult.error) throw listResult.error
+    const users = listResult.data?.users || []
 
     const targets = targetEmail
       ? users.filter(u => u.email?.toLowerCase() === targetEmail.toLowerCase())
@@ -398,15 +399,20 @@ Deno.serve(async (req) => {
 
       const emailHtml = buildEmail(insights, orbitStats, totalDaysActive, appUrl)
 
+      // Ensure subject is always sentence-cased
+      const subject = insights.subject
+        ? insights.subject.charAt(0).toUpperCase() + insights.subject.slice(1)
+        : 'Your week with Orbit'
+
       await sleep(500)
 
       const resp = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Karthiek from Orbit <weekly@orbityours.com>',
+          from: 'Karthiek from Orbit <hello@orbityours.com>',
           to: email,
-          subject: insights.subject,
+          subject,
           html: emailHtml,
         }),
       })
@@ -414,7 +420,7 @@ Deno.serve(async (req) => {
       const result = await resp.json()
       if (resp.ok) {
         console.log(`✓ ${email} — "${insights.subject}"`)
-        results.push({ email, status: 'sent', subject: insights.subject, daysActive: totalDaysActive })
+        results.push({ email, status: 'sent', subject, daysActive: totalDaysActive })
       } else {
         console.error(`✗ ${email}`, result)
         results.push({ email, status: 'failed', error: result.message })
