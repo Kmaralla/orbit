@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const resendApiKey = Deno.env.get('RESEND_API_KEY')!
     const appUrl = Deno.env.get('APP_URL') || 'https://www.orbityours.com'
-    const snoozeBaseUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.functions.supabase.co') + '/snooze-reminder' || ''
+    const snoozeBaseUrl = 'https://aeuvwynwyrlrtgkrujts.functions.supabase.co/snooze-reminder'
 
     if (!supabaseUrl || !supabaseServiceKey || !resendApiKey) {
       throw new Error('Missing environment variables')
@@ -324,8 +324,9 @@ Deno.serve(async (req) => {
       `).join('')
 
       // Snooze links (only works once SQL column exists)
-      const snooze2h = `${snoozeBaseUrl}?uid=${userId}&hours=2`
-      const snooze4h = `${snoozeBaseUrl}?uid=${userId}&hours=4`
+      // & must be &amp; inside HTML href attributes — unescaped & corrupts the URL in many email clients
+      const snooze2h = `${snoozeBaseUrl}?uid=${userId}&amp;hours=2`
+      const snooze4h = `${snoozeBaseUrl}?uid=${userId}&amp;hours=4`
 
       const emailHtml = `<!DOCTYPE html>
 <html>
