@@ -217,6 +217,13 @@ Deno.serve(async (req) => {
       .in('user_id', userIds)
       .gte('date', twoDaysAgo.toISOString().split('T')[0])
 
+    // Fetch yesterday's daily_plans for all users (to show plan completion in email)
+    const { data: yesterdayPlans } = await supabase
+      .from('daily_plans')
+      .select('user_id, date, flat_items, summary')
+      .in('user_id', userIds)
+      .gte('date', twoDaysAgo.toISOString().split('T')[0])
+
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
     const results: { email: string; status: string; subject?: string; error?: string }[] = []
 
@@ -235,6 +242,35 @@ Deno.serve(async (req) => {
 
       // Entries for this user
       const userEntries = (recentEntries || []).filter(e => e.user_id === userId)
+
+      // Yesterday's plan completion
+      const yPlan = (yesterdayPlans || []).find(p => p.user_id === userId && p.date === yesterdayStr)
+      let yesterdayPlanHtml = ''
+      if (yPlan) {
+        const flatItems = (yPlan.flat_items || []).filter((fi: { isSideQuest?: boolean }) => !fi.isSideQuest)
+        const totalCount = flatItems.length
+        if (totalCount > 0) {
+          const yesterdayDoneIds = new Set(
+            userEntries
+              .filter(e => e.date === yesterdayStr && e.value && e.value !== '' && e.value !== 'false')
+              .map(e => e.checklist_item_id)
+          )
+          const doneCount = flatItems.filter((fi: { id: string }) => yesterdayDoneIds.has(fi.id)).length
+          const pct = Math.round((doneCount / totalCount) * 100)
+          const emoji = pct === 100 ? '🎉' : pct >= 70 ? '💪' : pct >= 40 ? '📈' : '🌱'
+          const msg = pct === 100
+            ? `You crushed yesterday's plan — all ${totalCount} tasks done!`
+            : `Yesterday you completed ${doneCount} of ${totalCount} planned tasks (${pct}%). ${pct >= 70 ? 'Strong finish!' : 'Every bit counts — keep going.'}`
+          yesterdayPlanHtml = `
+            <div style="background:#6c63ff12;border:1px solid #6c63ff33;border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:10px;">
+              <span style="font-size:18px;line-height:1.2;">${emoji}</span>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#6c63ff;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.4px;">Yesterday's Plan</div>
+                <div style="font-size:13px;color:#a8a4c8;line-height:1.5;">${msg} Continue customizing your day with <strong style="color:#e8e4f0;">Plan My Day</strong>.</div>
+              </div>
+            </div>`
+        }
+      }
       const todayDoneIds = new Set(
         userEntries
           .filter(e => e.date === localDate && e.value && e.value !== '' && e.value !== 'false')
@@ -349,6 +385,9 @@ Deno.serve(async (req) => {
       </tr>
     </table>
   </td></tr>
+
+  <!-- Yesterday's plan completion -->
+  ${yesterdayPlanHtml ? `<tr><td>${yesterdayPlanHtml}</td></tr>` : ''}
 
   <!-- Streak badge + at-risk banner -->
   <tr><td>

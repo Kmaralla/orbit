@@ -25,6 +25,56 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
 
   useEffect(() => { fetchTodayData() }, [])
 
+  // Load today's plan from DB — restores across devices and refreshes
+  const loadSavedPlan = async (orbitsData, allEntries) => {
+    const { data: saved } = await supabase
+      .from('daily_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .single()
+
+    if (!saved) return false
+
+    // Rebuild planItems map from flat_items
+    const flatItems = saved.flat_items || []
+    const itemsMap = {}
+    for (const fi of flatItems) {
+      if (!itemsMap[fi.orbitId]) itemsMap[fi.orbitId] = []
+      itemsMap[fi.orbitId].push(fi)
+    }
+
+    // Restore checked state from today's entries
+    const initial = {}
+    const todayDoneIds = new Set(
+      (allEntries || []).filter(e => e.date === today && e.value && e.value !== '' && e.value !== 'false')
+        .map(e => e.checklist_item_id)
+    )
+    for (const fi of flatItems) {
+      if (fi.isSideQuest) {
+        // Side quest completion comes from side_quests table — check separately
+      } else if (todayDoneIds.has(fi.id)) {
+        initial[fi.id] = fi.value_type === 'checkbox' ? 'true' : '1'
+      }
+    }
+
+    // Check side quest completions
+    const sqIds = flatItems.filter(fi => fi.isSideQuest).map(fi => fi.id)
+    if (sqIds.length > 0) {
+      const { data: sqDone } = await supabase
+        .from('side_quests').select('id, completed').in('id', sqIds)
+      for (const sq of sqDone || []) {
+        if (sq.completed) initial[sq.id] = 'true'
+      }
+    }
+
+    setPlan({ plan: saved.plan_data, summary: saved.summary, greeting: 'Your plan is locked in. Let\'s do this.' })
+    setPlanItems(itemsMap)
+    setDayEntries(initial)
+    setPhase('plan')
+    return true
+  }
+
   const isScheduledToday = (frequency) => {
     if (!frequency || frequency === 'daily') return true
     if (frequency === 'weekdays') return ['mon', 'tue', 'wed', 'thu', 'fri'].includes(todayDayOfWeek)
@@ -75,6 +125,10 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
     }).filter(o => o.tasks.length > 0)
 
     setOrbitsWithTasks(enriched)
+
+    // Check if today's plan is already saved in DB — restore it if so
+    const restored = await loadSavedPlan(enriched, allEntries)
+    if (restored) return  // Already in plan phase, skip pre-selection
 
     // Fetch active side quests
     const { data: quests } = await supabase
@@ -144,7 +198,7 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
     })
   }
 
-  const lockInPlan = () => {
+  const lockInPlan = async () => {
     if (!orbitsWithTasks || (selectedTasks.size === 0 && selectedQuests.size === 0)) return
 
     const builtPlan = orbitsWithTasks.map(orbit => {
@@ -198,14 +252,36 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
       questCount > 0 ? `${questCount} side quest${questCount !== 1 ? 's' : ''}` : '',
     ].filter(Boolean).join(' · ')
 
-    setPlan({ plan: builtPlan, greeting: 'Your plan is locked in. Let\'s do this.', summary })
-    setPlanItems(items)
-    setDayEntries(initial)
+    // Build flat_items array for DB (easy server-side querying)
+    const flatItems = []
+    for (const planOrbit of builtPlan) {
+      if (planOrbit.orbitId === '__sidequests__') {
+        const chosenQs = sideQuests.filter(q => selectedQuests.has(q.id))
+        chosenQs.forEach(q => flatItems.push({ id: q.id, label: q.title, value_type: 'checkbox', orbitId: '__sidequests__', orbitName: 'Side Quests', orbitIcon: '☄️', isSideQuest: true }))
+      } else {
+        const orbitData = orbitsWithTasks.find(o => o.id === planOrbit.orbitId)
+        orbitData?.tasks.filter(t => selectedTasks.has(t.id)).forEach(t =>
+          flatItems.push({ id: t.id, label: t.label, value_type: t.value_type, orbitId: planOrbit.orbitId, orbitName: planOrbit.orbitName, orbitIcon: planOrbit.orbitIcon, isSideQuest: false })
+        )
+      }
+    }
 
+    // Save to DB — primary persistence (works across devices)
+    await supabase.from('daily_plans').upsert({
+      user_id: userId, date: today,
+      plan_data: builtPlan, flat_items: flatItems, summary,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,date' })
+
+    // Also cache in localStorage for instant load on same device
     localStorage.setItem(`orbit_today_plan_${userId}`, JSON.stringify({
       date: today, plan: builtPlan, planItems: items,
       greeting: 'Your plan is locked in. Let\'s do this.', summary,
     }))
+
+    setPlan({ plan: builtPlan, greeting: 'Your plan is locked in. Let\'s do this.', summary })
+    setPlanItems(items)
+    setDayEntries(initial)
     onPlanSaved?.()
     setPhase('plan')
   }
@@ -339,8 +415,16 @@ export default function BuildDay({ orbits, userId, onClose, onPlanSaved }) {
           </div>
 
           <div style={s.footer}>
-            <button style={{ ...s.lockBtn, background: 'none', border: `1px solid ${colors.border}`, color: colors.textDim, fontSize: 13, padding: '11px' }} onClick={() => setPhase('pick')}>
-              ← Edit my picks
+            <button
+              style={{ ...s.lockBtn, background: 'none', border: `1px solid ${colors.border}`, color: colors.textDim, fontSize: 13, padding: '11px' }}
+              onClick={async () => {
+                // Reload tasks so edit mode has fresh streak data
+                await fetchTodayData()
+                // fetchTodayData will call loadSavedPlan which sets phase='plan' — override to 'pick'
+                setPhase('pick')
+              }}
+            >
+              ✏️ Edit today's plan
             </button>
           </div>
         </div>

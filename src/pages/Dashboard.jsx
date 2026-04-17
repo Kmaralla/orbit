@@ -120,6 +120,7 @@ export default function Dashboard() {
 
     // Calculate today's counts
     const today = getLocalToday()
+
     const counts = {}
     allEntries?.filter(e => e.date === today).forEach(e => {
       const uid = e.checklist_items?.usecase_id
@@ -177,8 +178,8 @@ export default function Dashboard() {
     setFocusNarrative(narrative)
     setLoading(false)
 
-    // Re-validate today's plan against current orbits (clears stale deleted-orbit tasks)
-    loadTodayPlan(data || [])
+    // Load today's plan — DB first (cross-device), fallback to localStorage
+    await loadTodayPlan(data || [], allEntries)
   }
 
   const toggleReminders = async () => {
@@ -203,9 +204,53 @@ export default function Dashboard() {
     setTogglingReminder(false)
   }
 
-  const loadTodayPlan = (activeUsecases) => {
+  const loadTodayPlan = async (activeUsecases, allEntries) => {
     if (!user?.id) return
     const today = getLocalToday()
+    const activeIds = new Set((activeUsecases || usecases).map(u => u.id))
+
+    // 1. Try DB first — works across devices and refreshes
+    const { data: savedPlan } = await supabase
+      .from('daily_plans')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .single()
+
+    if (savedPlan) {
+      const flatItems = savedPlan.flat_items || []
+      const validPlan = (savedPlan.plan_data || []).filter(p => activeIds.has(p.orbitId) || p.orbitId === '__sidequests__')
+      if (validPlan.length > 0) {
+        // Rebuild planItems map from flat_items
+        const planItemsMap = {}
+        for (const fi of flatItems) {
+          if (!planItemsMap[fi.orbitId]) planItemsMap[fi.orbitId] = []
+          planItemsMap[fi.orbitId].push(fi)
+        }
+
+        // Restore completion state from today's checkin entries
+        const entries = allEntries || []
+        const todayDoneIds = new Set(
+          entries.filter(e => e.date === today && e.value && e.value !== '' && e.value !== 'false')
+            .map(e => e.checklist_item_id)
+        )
+        const restored = {}
+        for (const fi of flatItems) {
+          if (!fi.isSideQuest && todayDoneIds.has(fi.id)) {
+            restored[fi.id] = fi.value_type === 'checkbox' ? 'true' : '1'
+          }
+        }
+
+        setTodayPlan({ plan: validPlan, planItems: planItemsMap, summary: savedPlan.summary, greeting: 'Your plan is locked in. Let\'s do this.' })
+        setPlanEntries(restored)
+        const allIds = flatItems.map(fi => fi.id)
+        const done = allIds.length > 0 && allIds.every(id => { const v = restored[id]; return v && v !== '' && v !== 'false' })
+        if (done) setPlanAllDone(true)
+        return
+      }
+    }
+
+    // 2. Fallback to localStorage (same device, before DB sync catches up)
     try {
       const raw = localStorage.getItem(`orbit_today_plan_${user.id}`)
       if (!raw) return
@@ -213,19 +258,12 @@ export default function Dashboard() {
       if (stored.date !== today) { localStorage.removeItem(`orbit_today_plan_${user.id}`); return }
 
       // Filter out any orbits that no longer exist (deleted after plan was created)
-      const activeIds = new Set((activeUsecases || usecases).map(u => u.id))
-      if (stored.plan) {
-        stored.plan = stored.plan.filter(p => activeIds.has(p.orbitId))
-      }
-      if (stored.planItems) {
-        Object.keys(stored.planItems).forEach(k => { if (!activeIds.has(k)) delete stored.planItems[k] })
-      }
-      // If the plan is now empty after filtering, clear it
+      if (stored.plan) stored.plan = stored.plan.filter(p => activeIds.has(p.orbitId) || p.orbitId === '__sidequests__')
+      if (stored.planItems) Object.keys(stored.planItems).forEach(k => { if (!activeIds.has(k) && k !== '__sidequests__') delete stored.planItems[k] })
       if (!stored.plan?.length) { localStorage.removeItem(`orbit_today_plan_${user.id}`); return }
 
       setTodayPlan(stored)
       setPlanEntries(stored.entries || {})
-      // Check if already all done
       const allIds = Object.values(stored.planItems || {}).flat().map(i => i.id)
       const done = allIds.every(id => { const v = (stored.entries || {})[id]; return v && v !== '' && v !== 'false' })
       if (allIds.length > 0 && done) setPlanAllDone(true)
@@ -274,6 +312,7 @@ export default function Dashboard() {
 
   const dismissPlan = () => {
     try { localStorage.removeItem(`orbit_today_plan_${user.id}`) } catch {}
+    supabase.from('daily_plans').delete().eq('user_id', user.id).eq('date', getLocalToday())
     setTodayPlan(null)
     setPlanEntries({})
     setPlanAllDone(false)
