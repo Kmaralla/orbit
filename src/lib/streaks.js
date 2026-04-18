@@ -4,11 +4,12 @@
  * Calculate streak for a checklist item based on check-in entries
  * @param {Array} entries - Array of { date, value } entries for the item
  * @param {string} frequency - 'daily', 'weekdays', 'weekly', or 'custom:mon,wed,fri'
- * @returns {Object} { current: number, best: number, lastCheckedDate: string, atRisk: boolean }
+ * @param {string|null} pausedAt - ISO date string when orbit was paused (null if active)
+ * @returns {Object} { current: number, best: number, lastCheckedDate: string, atRisk: boolean, paused: boolean }
  */
-export function calculateStreak(entries, frequency = 'daily') {
+export function calculateStreak(entries, frequency = 'daily', pausedAt = null) {
   if (!entries || entries.length === 0) {
-    return { current: 0, best: 0, lastCheckedDate: null, atRisk: false }
+    return { current: 0, best: 0, lastCheckedDate: null, atRisk: false, paused: !!pausedAt }
   }
 
   // Sort entries by date descending (most recent first)
@@ -17,15 +18,16 @@ export function calculateStreak(entries, frequency = 'daily') {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
 
   if (sortedEntries.length === 0) {
-    return { current: 0, best: 0, lastCheckedDate: null, atRisk: false }
+    return { current: 0, best: 0, lastCheckedDate: null, atRisk: false, paused: !!pausedAt }
   }
 
-  const today = new Date()
+  // If paused: freeze streak at the pause date — no missed days accumulate after that point
+  const today = pausedAt ? new Date(pausedAt) : new Date()
   today.setHours(0, 0, 0, 0)
 
   const scheduledDays = getScheduledDays(frequency)
 
-  // Get all dates that should have been checked (working backwards from today)
+  // Get all dates that should have been checked (working backwards from reference date)
   const expectedDates = getExpectedDates(today, scheduledDays, 365) // Look back 1 year max
 
   // Create a set of completed dates
@@ -39,10 +41,12 @@ export function calculateStreak(entries, frequency = 'daily') {
     if (completedDates.has(expectedDate)) {
       currentStreak++
     } else {
-      // Check if this is today (haven't checked yet today is OK)
-      const expectedDateObj = new Date(expectedDate)
-      if (expectedDateObj.getTime() === today.getTime()) {
-        continue // Skip today, they might still check in
+      // If not paused: skip today (user might still check in)
+      if (!pausedAt) {
+        const expectedDateObj = new Date(expectedDate)
+        if (expectedDateObj.getTime() === today.getTime()) {
+          continue
+        }
       }
       break // Streak broken
     }
@@ -61,17 +65,20 @@ export function calculateStreak(entries, frequency = 'daily') {
     }
   }
 
-  // Check if streak is at risk (not checked today but was expected)
-  const todayStr = today.toISOString().split('T')[0]
-  const isTodayScheduled = isDateScheduled(today, scheduledDays)
-  const checkedToday = completedDates.has(todayStr)
-  const atRisk = isTodayScheduled && !checkedToday && currentStreak > 0
+  // Paused orbits are never at risk — streak is frozen
+  const atRisk = pausedAt ? false : (() => {
+    const todayStr = today.toISOString().split('T')[0]
+    const isTodayScheduled = isDateScheduled(today, scheduledDays)
+    const checkedToday = completedDates.has(todayStr)
+    return isTodayScheduled && !checkedToday && currentStreak > 0
+  })()
 
   return {
     current: currentStreak,
     best: bestStreak,
     lastCheckedDate,
-    atRisk
+    atRisk,
+    paused: !!pausedAt,
   }
 }
 

@@ -142,7 +142,8 @@ export default function Dashboard() {
           ?.filter(e => e.checklist_item_id === item.id)
           .map(e => ({ date: e.date, value: e.value })) || []
 
-        const streak = calculateStreak(itemEntries, item.frequency)
+        // Pass paused_at so streak is frozen at pause date — no missed days accumulate
+        const streak = calculateStreak(itemEntries, item.frequency, orbit.paused_at || null)
 
         if (streak.current > bestCurrentStreak) {
           bestCurrentStreak = streak.current
@@ -334,6 +335,16 @@ export default function Dashboard() {
     await supabase.from('usecases').delete().eq('id', id)
     setUsecases(prev => prev.filter(u => u.id !== id))
     // Re-fetch so topFocus, streaks, and item counts drop the deleted orbit
+    fetchUsecases()
+  }
+
+  const togglePause = async (uc, e) => {
+    e.stopPropagation()
+    const now = new Date().toISOString()
+    const newPausedAt = uc.paused_at ? null : now
+    await supabase.from('usecases').update({ paused_at: newPausedAt }).eq('id', uc.id)
+    setUsecases(prev => prev.map(u => u.id === uc.id ? { ...u, paused_at: newPausedAt } : u))
+    // Re-score focus since paused orbits are excluded
     fetchUsecases()
   }
 
@@ -1188,18 +1199,31 @@ export default function Dashboard() {
             {usecases.filter(uc => !uc.closed_at).map(uc => {
               const today = getLocalToday()
               const isExpired = uc.end_date && uc.end_date < today
+              const isPaused = !!uc.paused_at
               const daysLeft = uc.end_date && !isExpired
                 ? Math.ceil((new Date(uc.end_date) - new Date(today)) / (1000 * 60 * 60 * 24))
                 : null
               return (
               <div
                 key={uc.id}
-                style={{ ...s.card, borderColor: isExpired ? '#f59e0b66' : colors.border }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = isExpired ? '#f59e0b' : colors.accent + '66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = isExpired ? '#f59e0b66' : colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
+                style={{ ...s.card, borderColor: isPaused ? '#6366f166' : isExpired ? '#f59e0b66' : colors.border, opacity: isPaused ? 0.72 : 1 }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = isPaused ? '#6366f1' : isExpired ? '#f59e0b' : colors.accent + '66'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = isPaused ? '#6366f166' : isExpired ? '#f59e0b66' : colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
               >
+              {/* Paused banner */}
+              {isPaused && (
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'linear-gradient(90deg,#6366f122,#6366f111)', borderRadius: '20px 20px 0 0', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, color: '#818cf8', fontWeight: 700 }}>⏸ Paused · streak preserved</span>
+                  <button
+                    onClick={e => togglePause(uc, e)}
+                    style={{ background: '#6366f122', border: '1px solid #6366f166', borderRadius: 6, padding: '3px 10px', color: '#818cf8', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}
+                  >
+                    Resume →
+                  </button>
+                </div>
+              )}
               {/* Expired banner */}
-              {isExpired && (
+              {isExpired && !isPaused && (
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'linear-gradient(90deg,#f59e0b22,#f59e0b11)', borderRadius: '20px 20px 0 0', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700 }}>🏁 Goal date reached</span>
                   <button
@@ -1248,11 +1272,11 @@ export default function Dashboard() {
                     <span
                       style={{
                         ...s.streakBadge,
-                        background: orbitStreaks[uc.id]?.atRisk ? '#f59e0b22' : '#22c55e22',
-                        color: orbitStreaks[uc.id]?.atRisk ? '#f59e0b' : '#22c55e',
+                        background: isPaused ? '#6366f122' : orbitStreaks[uc.id]?.atRisk ? '#f59e0b22' : '#22c55e22',
+                        color: isPaused ? '#818cf8' : orbitStreaks[uc.id]?.atRisk ? '#f59e0b' : '#22c55e',
                       }}
                     >
-                      {orbitStreaks[uc.id]?.atRisk ? '⚠️' : '🔥'} {orbitStreaks[uc.id]?.current} days
+                      {isPaused ? '⏸' : orbitStreaks[uc.id]?.atRisk ? '⚠️' : '🔥'} {orbitStreaks[uc.id]?.current} days
                     </span>
                   )}
                   {uc.notify_email && (
@@ -1269,8 +1293,8 @@ export default function Dashboard() {
                 <div style={s.cardDesc}>{uc.description || 'Daily check-in tracking'}</div>
 
                 <div style={s.cardFooter}>
-                  <span style={s.badge}>
-                    {todayStats[uc.id] ? `✓ ${todayStats[uc.id]} checked today` : '○ Not checked today'}
+                  <span style={{ ...s.badge, ...(isPaused ? { background: '#6366f111', color: '#818cf8' } : {}) }}>
+                    {isPaused ? '⏸ On a break' : todayStats[uc.id] ? `✓ ${todayStats[uc.id]} checked today` : '○ Not checked today'}
                   </span>
                 </div>
 
@@ -1301,11 +1325,22 @@ export default function Dashboard() {
                     <span>📊</span> Stats
                   </button>
                   <button
-                    style={s.checkInBtn}
-                    onClick={() => navigate(`/usecase/${uc.id}`)}
+                    style={{ ...s.actionBtnSmall, background: isPaused ? '#6366f118' : colors.border, color: isPaused ? '#818cf8' : colors.textMuted }}
+                    onClick={e => togglePause(uc, e)}
+                    onMouseEnter={e => { e.currentTarget.style.background = isPaused ? '#6366f133' : colors.borderLight; e.currentTarget.style.color = isPaused ? '#818cf8' : colors.text }}
+                    onMouseLeave={e => { e.currentTarget.style.background = isPaused ? '#6366f118' : colors.border; e.currentTarget.style.color = isPaused ? '#818cf8' : colors.textMuted }}
+                    title={isPaused ? 'Resume this orbit' : 'Pause this orbit (streak is preserved)'}
                   >
-                    Check In →
+                    <span>{isPaused ? '▶' : '⏸'}</span> {isPaused ? 'Resume' : 'Pause'}
                   </button>
+                  {!isPaused && (
+                    <button
+                      style={s.checkInBtn}
+                      onClick={() => navigate(`/usecase/${uc.id}`)}
+                    >
+                      Check In →
+                    </button>
+                  )}
                 </div>
               </div>
             )})}

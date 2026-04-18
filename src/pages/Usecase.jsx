@@ -543,6 +543,25 @@ export default function Usecase() {
         </div>
 
         {/* Closed orbit banner */}
+        {/* Paused banner */}
+        {usecase?.paused_at && !usecase?.closed_at && (
+          <div style={{ background: 'linear-gradient(90deg, #6366f118, #6366f108)', border: '1px solid #6366f144', borderRadius: 14, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>⏸</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 700, color: '#818cf8' }}>This orbit is paused</div>
+              <div style={{ fontSize: 13, color: colors.textDim, marginTop: 2 }}>
+                Your streak is preserved. Check in anytime — or resume from the dashboard when you're ready.
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/dashboard')}
+              style={{ background: '#6366f122', border: '1px solid #6366f166', borderRadius: 8, padding: '7px 14px', color: '#818cf8', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap' }}
+            >
+              Back to Dashboard →
+            </button>
+          </div>
+        )}
+
         {usecase?.closed_at && (
           <div style={{ background: 'linear-gradient(90deg, #6c63ff18, #6c63ff08)', border: '1px solid #6c63ff33', borderRadius: 14, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 24 }}>{usecase.goal_achieved ? '🏆' : '🌱'}</span>

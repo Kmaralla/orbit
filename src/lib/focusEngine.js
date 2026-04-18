@@ -100,6 +100,9 @@ export function scoreFocusCandidates(candidates) {
   }
 
   for (const { item, orbit, streak, itemEntries, today } of candidates) {
+    // Skip paused orbits entirely — they're on a break
+    if (orbit.paused_at) continue
+
     if (!isScheduledToday(item.frequency)) continue
 
     // Skip already done today
