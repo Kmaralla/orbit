@@ -342,10 +342,16 @@ export default function Dashboard() {
     e.stopPropagation()
     const now = new Date().toISOString()
     const newPausedAt = uc.paused_at ? null : now
-    await supabase.from('usecases').update({ paused_at: newPausedAt }).eq('id', uc.id)
+    const { error } = await supabase.from('usecases').update({ paused_at: newPausedAt }).eq('id', uc.id)
+    if (error) { console.error('Pause failed:', error); return }
+    // Update local state — no re-fetch (would race and overwrite)
     setUsecases(prev => prev.map(u => u.id === uc.id ? { ...u, paused_at: newPausedAt } : u))
-    // Re-score focus since paused orbits are excluded
-    fetchUsecases()
+    // Clear at-risk flag from orbit streaks when pausing
+    if (newPausedAt) {
+      setOrbitStreaks(prev => ({ ...prev, [uc.id]: { ...prev[uc.id], atRisk: false } }))
+      // Remove from focus list
+      setTopFocus(prev => prev.filter(f => f.orbit?.id !== uc.id))
+    }
   }
 
   const s = {
