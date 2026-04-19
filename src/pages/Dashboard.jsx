@@ -636,22 +636,52 @@ export default function Dashboard() {
     red:    { color: '#ef4444', bg: '#ef444414', label: '○ Behind' },
   }
 
+  // When a plan is active, return plan-based completion for this orbit
+  // Returns null if no plan or orbit not in plan
+  const getPlanCompletion = (ucId) => {
+    if (!todayPlan) return null
+    const planOrbit = (todayPlan.plan || []).find(p => p.orbitId === ucId)
+    if (!planOrbit) return null
+    const items = (todayPlan.planItems || {})[ucId] || []
+    if (items.length === 0) return null
+    const done = items.filter(i => { const v = planEntries[i.id]; return v && v !== '' && v !== 'false' }).length
+    return { done, total: items.length, pct: Math.round((done / items.length) * 100) }
+  }
+
   const getOrbitHealth = (ucId) => {
     if (!orbitItemCounts[ucId]) return null // no items yet
+
+    // When plan is active, base health on plan completion for this orbit
+    const planComp = getPlanCompletion(ucId)
+    if (planComp) {
+      if (planComp.pct === 100) return 'green'
+      if (planComp.pct >= 50) return 'yellow'
+      return 'red'
+    }
+
+    // Orbits not in today's plan — don't penalize them, show based on streak only
+    if (todayPlan) return null
+
+    // No plan active — use raw check-in data
     const checkedToday = !!todayStats[ucId]
     const streak = orbitStreaks[ucId]?.current || 0
-    const atRisk = orbitStreaks[ucId]?.atRisk || false
     if (checkedToday && streak >= 3) return 'green'
     if (!checkedToday && streak < 3) return 'red'
-    return 'yellow' // checked today w/ low streak, or has streak but not checked yet
+    return 'yellow'
   }
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || 'there'
 
-  // Find orbits not checked in today
-  const uncheckedOrbits = usecases.filter(uc => !todayStats[uc.id])
+  // Find orbits not completed today — plan-aware
+  const uncheckedOrbits = usecases.filter(uc => {
+    if (uc.closed_at || uc.paused_at) return false
+    const planComp = getPlanCompletion(uc.id)
+    if (planComp) return planComp.pct < 100  // in plan but not fully done
+    if (todayPlan) return false              // not in plan — not "unchecked"
+    return !todayStats[uc.id]               // no plan — raw check-in data
+  })
   const hasUnchecked = uncheckedOrbits.length > 0 && usecases.length > 0
 
   return (
@@ -1299,9 +1329,24 @@ export default function Dashboard() {
                 <div style={s.cardDesc}>{uc.description || 'Daily check-in tracking'}</div>
 
                 <div style={s.cardFooter}>
-                  <span style={{ ...s.badge, ...(isPaused ? { background: '#6366f111', color: '#818cf8' } : {}) }}>
-                    {isPaused ? '⏸ On a break' : todayStats[uc.id] ? `✓ ${todayStats[uc.id]} checked today` : '○ Not checked today'}
-                  </span>
+                  {(() => {
+                    if (isPaused) return <span style={{ ...s.badge, background: '#6366f111', color: '#818cf8' }}>⏸ On a break</span>
+                    const planComp = getPlanCompletion(uc.id)
+                    if (planComp) {
+                      const allDone = planComp.pct === 100
+                      const color = allDone ? '#22c55e' : planComp.pct >= 50 ? '#f59e0b' : '#ef4444'
+                      return (
+                        <span style={{ ...s.badge, background: color + '18', color }}>
+                          {allDone ? '✓' : `${planComp.done}/${planComp.total}`} {allDone ? 'All planned done!' : `planned done · ${planComp.pct}%`}
+                        </span>
+                      )
+                    }
+                    if (todayPlan) {
+                      // Plan active but this orbit wasn't picked today
+                      return <span style={s.badge}>— Not in today's plan</span>
+                    }
+                    return <span style={s.badge}>{todayStats[uc.id] ? `✓ ${todayStats[uc.id]} checked today` : '○ Not checked today'}</span>
+                  })()}
                 </div>
 
                 {/* Action buttons - evenly spaced */}
