@@ -89,3 +89,23 @@ create policy "Users manage own entries"
 -- =============================================
 -- Done! Tables created successfully.
 -- =============================================
+
+-- DAILY_PLANS table — persists Plan My Day across devices
+create table if not exists daily_plans (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  date date not null,
+  plan_data jsonb not null default '[]',   -- orbit-grouped plan for display
+  flat_items jsonb not null default '[]',  -- flat array of { id, label, value_type, orbitId, orbitName, orbitIcon, isSideQuest }
+  summary text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(user_id, date)
+);
+
+alter table daily_plans enable row level security;
+
+create policy "Users manage own daily plans"
+  on daily_plans for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
