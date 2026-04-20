@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { calculateStreak, getStreakDisplay } from '../lib/streaks'
 import { scoreFocusCandidates, buildFocusNarrative } from '../lib/focusEngine'
+import StreakCelebration, { checkStreakMilestone, markMilestoneSeen } from '../components/StreakCelebration'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
 import EditOrbit from '../components/EditOrbit'
@@ -55,6 +56,8 @@ export default function Dashboard() {
   const [showOrganize, setShowOrganize] = useState(false)
   const [activityEntries, setActivityEntries] = useState([])
   const [activityTotalItems, setActivityTotalItems] = useState(0)
+  const [celebration, setCelebration] = useState(null) // { milestone, orbitId }
+  const [celebrationOrbitName, setCelebrationOrbitName] = useState('')
 
   const userEmail = user?.email || ''
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
@@ -164,6 +167,19 @@ export default function Dashboard() {
     }
 
     setOrbitStreaks(streaks)
+
+    // Check for streak milestones — show celebration modal for first uncelebrated milestone
+    if (user?.id) {
+      for (const orbit of data) {
+        const streak = streaks[orbit.id]?.current || 0
+        const hit = checkStreakMilestone(orbit.id, user.id, streak)
+        if (hit) {
+          setCelebration(hit)
+          setCelebrationOrbitName(orbit.name)
+          break // show one at a time
+        }
+      }
+    }
 
     // Count checklist items per orbit
     const itemCounts = {}
@@ -329,6 +345,62 @@ export default function Dashboard() {
       ? { timezone: tz, notify_time: time }
       : { timezone: tz }
     await supabase.from('usecases').update(update).eq('user_id', user.id)
+  }
+
+  const TEMPLATES = [
+    { icon: '🌅', name: 'Morning Routine', description: 'Start every day with intention', items: [
+      { label: 'No phone for first 30 min', value_type: 'checkbox' },
+      { label: 'Drink a glass of water', value_type: 'checkbox' },
+      { label: '10 min movement or stretch', value_type: 'checkbox' },
+      { label: 'Morning energy level (1-10)', value_type: 'score' },
+    ]},
+    { icon: '💪', name: 'Health & Wellness', description: 'Daily habits that compound over time', items: [
+      { label: 'Steps walked today', value_type: 'number' },
+      { label: 'Sleep hours last night', value_type: 'number' },
+      { label: 'Drank 8 glasses of water', value_type: 'checkbox' },
+      { label: 'Took vitamins / medication', value_type: 'checkbox' },
+      { label: 'Overall wellness today (1-10)', value_type: 'score' },
+    ]},
+    { icon: '💼', name: 'Career Growth', description: 'Show up for your professional goals', items: [
+      { label: 'Deep work block (2+ hours)', value_type: 'checkbox' },
+      { label: 'One learning session', value_type: 'checkbox' },
+      { label: 'Productivity today (1-10)', value_type: 'score' },
+      { label: 'Key win or insight today', value_type: 'text' },
+    ]},
+    { icon: '👪', name: 'Family Time', description: 'Be present for the people who matter most', items: [
+      { label: 'Family dinner together', value_type: 'checkbox' },
+      { label: 'Screen-free hour with family', value_type: 'checkbox' },
+      { label: 'Quality time today (1-10)', value_type: 'score' },
+    ]},
+    { icon: '🧘', name: 'Mindfulness', description: 'Train your mind like you train your body', items: [
+      { label: '10 min meditation', value_type: 'checkbox' },
+      { label: 'Gratitude — 3 things I\'m thankful for', value_type: 'text' },
+      { label: 'Stress level today (1-10)', value_type: 'score' },
+    ]},
+    { icon: '📚', name: 'Learning Streak', description: 'Grow a little every single day', items: [
+      { label: 'Read 30 minutes', value_type: 'checkbox' },
+      { label: 'Practice a skill', value_type: 'checkbox' },
+      { label: 'Pages / chapters read', value_type: 'number' },
+    ]},
+  ]
+
+  const createFromTemplate = async (template) => {
+    const { data: uc, error } = await supabase.from('usecases').insert({
+      user_id: user.id,
+      name: template.name,
+      icon: template.icon,
+      description: template.description,
+    }).select().single()
+    if (error || !uc) return
+    const itemRows = template.items.map((item, idx) => ({
+      usecase_id: uc.id,
+      label: item.label,
+      value_type: item.value_type,
+      frequency: 'daily',
+      sort_order: idx,
+    }))
+    await supabase.from('checklist_items').insert(itemRows)
+    fetchUsecases()
   }
 
   const deleteUsecase = async (id) => {
@@ -1068,9 +1140,9 @@ export default function Dashboard() {
                 {/* Email Reminder Toggle */}
                 <div style={{ ...s.reminderToggle, flex: 1, minWidth: 260, marginBottom: 0 }}>
                   <div>
-                    <div style={s.toggleLabel}>📧 Email reminders</div>
+                    <div style={s.toggleLabel}>📧 Weekly digest</div>
                     <div style={s.toggleSub}>
-                      {remindersEnabled ? `Sending to ${userEmail}` : 'Daily digest emails'}
+                      {remindersEnabled ? `Sending to ${userEmail}` : 'Monday recap — wins, streaks, what to focus on'}
                     </div>
                   </div>
                   <div
@@ -1153,13 +1225,34 @@ export default function Dashboard() {
             ))}
           </div>
         ) : usecases.length === 0 ? (
-          <div style={{ maxWidth: 560, margin: '0 auto', padding: '8px 0 40px' }}>
+          <div style={{ maxWidth: 680, margin: '0 auto', padding: '8px 0 40px' }}>
             <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 800, color: colors.text, marginBottom: 6 }}>
-              What are you here to track? 🎯
+              Welcome to Orbit ✦
             </div>
-            <p style={{ fontSize: 14, color: colors.textDim, lineHeight: 1.7, marginBottom: 28 }}>
-              Orbit keeps you consistent — on daily habits, life goals, or just things you need to get done. Here's how to start:
+            <p style={{ fontSize: 14, color: colors.textDim, lineHeight: 1.7, marginBottom: 24 }}>
+              Start with a template — everything is customizable after.
             </p>
+
+            {/* Quick-start templates */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 28 }}>
+              {TEMPLATES.map(t => (
+                <button
+                  key={t.name}
+                  onClick={() => createFromTemplate(t)}
+                  style={{ background: colors.bgCard, border: `1.5px solid ${colors.border}`, borderRadius: 16, padding: '16px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', gap: 6 }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = colors.accent + '88'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.transform = 'translateY(0)' }}
+                >
+                  <span style={{ fontSize: 28 }}>{t.icon}</span>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 800, color: colors.text }}>{t.name}</div>
+                  <div style={{ fontSize: 12, color: colors.textDim, lineHeight: 1.5 }}>{t.description}</div>
+                  <div style={{ fontSize: 11, color: colors.accent, fontWeight: 700, marginTop: 4 }}>{t.items.length} daily items →</div>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 13, color: colors.textDim, marginBottom: 16, textAlign: 'center' }}>— or build your own —</div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Path 1 — AI-built orbit */}
               <button
@@ -1532,6 +1625,15 @@ export default function Dashboard() {
 
       <SideQuestPanel />
       <OrbitChat orbits={usecases} stats={orbitStreaks} />
+
+      <StreakCelebration
+        celebration={celebration}
+        orbitName={celebrationOrbitName}
+        onDismiss={() => {
+          if (celebration) markMilestoneSeen(user.id, celebration.orbitId, celebration.milestone)
+          setCelebration(null)
+        }}
+      />
 
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
