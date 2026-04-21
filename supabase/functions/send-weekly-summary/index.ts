@@ -324,9 +324,11 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // ?email=xxx → test mode (single user only)
+    // ?email=xxx → send to that user only
+    // No param → hardcoded to marella.karthik@gmail.com until explicitly opened up
+    const ALLOW_BULK = false  // flip to true when ready to send to all users
     const url = new URL(req.url)
-    const targetEmail = url.searchParams.get('email')
+    const targetEmail = url.searchParams.get('email') || (ALLOW_BULK ? null : 'marella.karthik@gmail.com')
 
     // Get users from auth
     const listResult = await supabase.auth.admin.listUsers({ perPage: 1000 })
