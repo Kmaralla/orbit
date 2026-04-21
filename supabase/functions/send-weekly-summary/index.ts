@@ -88,7 +88,7 @@ async function getInsights(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       system: `You write weekly progress emails for ${userName}, a user of Orbit (a personal habit/life-tracking app).
 
@@ -115,10 +115,16 @@ Return ONLY valid JSON — no markdown, no extra text:
   })
 
   const data = await response.json()
+  if (!response.ok) {
+    console.error('Claude API error:', JSON.stringify(data))
+    throw new Error(`Claude API ${response.status}: ${data.error?.message || 'unknown'}`)
+  }
   const text = data.content?.find((b: any) => b.type === 'text')?.text || '{}'
+  console.log('Claude raw response:', text.slice(0, 300))
   try {
     return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch {
+  } catch (e) {
+    console.error('JSON parse failed:', e, 'text was:', text)
     return {
       subject: 'your week with orbit',
       openingLine: 'Another week in orbit. Here\'s how it went.',
@@ -132,7 +138,15 @@ Return ONLY valid JSON — no markdown, no extra text:
 
 // ── Email HTML ─────────────────────────────────────────────────────────────────
 
-function buildEmail(insights: any, orbitStats: any[], totalDaysActive: number, appUrl: string): string {
+function buildEmail(rawInsights: any, orbitStats: any[], totalDaysActive: number, appUrl: string): string {
+  // Guarantee all fields have a value — prevents "undefined" rendering if Claude fails
+  const insights = {
+    openingLine:  rawInsights?.openingLine  || 'Here\'s how your week looked.',
+    winLine:      rawInsights?.winLine      || `You checked in ${totalDaysActive} of 7 days — that\'s the habit.`,
+    watchLine:    rawInsights?.watchLine    || 'Some orbits had gaps this week — pick one to focus on.',
+    focusAction:  rawInsights?.focusAction  || 'Check in every day this week on your most important orbit.',
+    closingLine:  rawInsights?.closingLine  || 'What gets tracked, gets better.',
+  }
   const ZONES: Record<string, { bg: string; border: string; color: string; tag: string }> = {
     win:   { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d', tag: '● On track' },
     watch: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', tag: '◐ Keep it up' },
