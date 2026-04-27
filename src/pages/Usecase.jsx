@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { playCheckSound, playLogSound } from '../lib/sounds'
-import { getCheckinInsight } from '../lib/claude'
+import { getCheckinInsight, getOrbitSidebarInsight } from '../lib/claude'
 import MilestoneCelebration, { getMilestoneKey } from '../components/MilestoneCelebration'
 import Navbar from '../components/Navbar'
 
@@ -53,6 +53,10 @@ export default function Usecase() {
   const [insight, setInsight] = useState(null)
   const [insightLoading, setInsightLoading] = useState(false)
   const [milestone, setMilestone] = useState(null) // { key, stats }
+  const [sidebarInsight, setSidebarInsight] = useState(null)
+  const [sidebarLoading, setSidebarLoading] = useState(true)
+  const [typewriterText, setTypewriterText] = useState('')
+  const [typewriterDone, setTypewriterDone] = useState(false)
   const [markingAllDone, setMarkingAllDone] = useState(false)
   // Use local date, not UTC — toISOString() shifts to UTC and breaks for users in EST/IST after certain hours
   const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]
@@ -174,6 +178,31 @@ export default function Usecase() {
     }
 
     setLoading(false)
+
+    // Async sidebar insight — load after main UI is ready
+    if (uc && (its || []).length > 0) {
+      setSidebarLoading(true)
+      getOrbitSidebarInsight(uc, its || [], recentEntries || []).then(insight => {
+        setSidebarInsight(insight)
+        setSidebarLoading(false)
+        // Typewriter effect on summary
+        if (insight?.summary) {
+          let i = 0
+          setTypewriterText('')
+          setTypewriterDone(false)
+          const interval = setInterval(() => {
+            i++
+            setTypewriterText(insight.summary.slice(0, i))
+            if (i >= insight.summary.length) {
+              clearInterval(interval)
+              setTypewriterDone(true)
+            }
+          }, 18)
+        }
+      })
+    } else {
+      setSidebarLoading(false)
+    }
   }
 
   const saveEntry = async (itemId, value, valueType) => {
@@ -325,7 +354,9 @@ export default function Usecase() {
 
   const s = {
     page: { minHeight: '100vh', background: colors.bg },
-    content: { maxWidth: 800, margin: '0 auto', padding: '40px 24px' },
+    content: { maxWidth: 1100, margin: '0 auto', padding: '40px 24px' },
+    layout: { display: 'flex', gap: 28, alignItems: 'flex-start' },
+    main: { flex: 1, minWidth: 0 },
     back: { background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 14, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Nunito, sans-serif' },
     header: { marginBottom: 36 },
     ucTitle: { fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 800, color: colors.text, letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 },
@@ -517,7 +548,8 @@ export default function Usecase() {
       <Navbar />
       <div style={s.content}>
         <button style={s.back} onClick={() => navigate('/dashboard')}>← Back to Dashboard</button>
-
+        <div style={s.layout}>
+        <div style={s.main}>
         <div style={s.header}>
           <div style={s.ucTitle}>
             <span>{usecase?.icon}</span>
@@ -817,7 +849,85 @@ export default function Usecase() {
             📊 Check Your Progress
           </button>
         </div>
-      </div>
+        </div>{/* end s.main */}
+
+        {/* AI Insight Sidebar */}
+        <div style={{
+          width: 300, flexShrink: 0,
+          position: 'sticky', top: 80, alignSelf: 'flex-start',
+          background: colors.bgCard,
+          border: `1px solid ${colors.border}`,
+          borderRadius: 20,
+          padding: 20,
+          display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🤖</span>
+            <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 800, color: colors.text }}>Orbit Insight</span>
+          </div>
+
+          {sidebarLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[80, 100, 60, 90, 70].map((w, i) => (
+                <div key={i} style={{ height: 10, width: `${w}%`, background: colors.border, borderRadius: 6, animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${i * 0.1}s` }} />
+              ))}
+              <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }`}</style>
+            </div>
+          ) : sidebarInsight ? (
+            <>
+              {/* Typewriter summary */}
+              <div style={{ fontSize: 13, color: colors.textDim, lineHeight: 1.7, borderLeft: `3px solid ${colors.accent}`, paddingLeft: 12 }}>
+                {typewriterText}
+                {!typewriterDone && <span style={{ borderRight: `2px solid ${colors.accent}`, animation: 'blink 0.7s step-end infinite', marginLeft: 1 }}>&nbsp;</span>}
+                <style>{`@keyframes blink { 50% { opacity: 0 } }`}</style>
+              </div>
+
+              {/* Highlight */}
+              {sidebarInsight.highlight && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>WIN</div>
+                  <div style={{ fontSize: 12, color: '#166534', lineHeight: 1.55 }}>{sidebarInsight.highlight}</div>
+                </div>
+              )}
+
+              {/* Challenge */}
+              {sidebarInsight.challenge && (
+                <div style={{ background: '#fff7ed', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#c2410c', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>WATCH</div>
+                  <div style={{ fontSize: 12, color: '#9a3412', lineHeight: 1.55 }}>{sidebarInsight.challenge}</div>
+                </div>
+              )}
+
+              {/* Tip */}
+              {sidebarInsight.tip && (
+                <div style={{ background: colors.accent + '10', border: `1px solid ${colors.accent}33`, borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: colors.accent, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>TIP</div>
+                  <div style={{ fontSize: 12, color: colors.text, lineHeight: 1.55 }}>{sidebarInsight.tip}</div>
+                </div>
+              )}
+
+              {/* Links */}
+              {sidebarInsight.links?.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: colors.textDim, letterSpacing: '0.8px', textTransform: 'uppercase' }}>LEARN MORE</div>
+                  {sidebarInsight.links.map((link, i) => (
+                    <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 12, color: colors.accent, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    >
+                      <span>↗</span> {link.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: colors.textDim, lineHeight: 1.6 }}>
+              Add some check-ins to unlock your personalized insight.
+            </div>
+          )}
+        </div>
+        </div>{/* end s.layout */}
+      </div>{/* end s.content */}
 
       {showAddItem && (
         <div style={s.modal} onClick={() => setShowAddItem(false)}>

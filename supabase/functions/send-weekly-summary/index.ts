@@ -57,6 +57,7 @@ function computeOrbitStats(orbit: any, items: any[], entries: any[], weekStart: 
 async function getInsights(
   userName: string,
   orbitStats: ReturnType<typeof computeOrbitStats>[],
+  allOrbits: any[],
   totalDaysActive: number,
   isNewUser: boolean,
   anthropicKey: string
@@ -72,6 +73,13 @@ async function getInsights(
     return `${s.orbit.icon} ${s.orbit.name} — ${s.completionPct}% (${s.daysActive}/7 days active)\n${items}`
   }).join('\n\n')
 
+  // All orbits the user has set up (even if no checkins this week)
+  const allOrbitNames = allOrbits.map(o => `${o.icon} ${o.name}`).join(', ')
+  // Best/most active orbit for subject line
+  const topOrbit = validStats.sort((a, b) => b.completionPct - a.completionPct)[0]?.orbit
+    || allOrbits[0]
+  const orbitNames = allOrbitNames
+
   const segment = isNewUser
     ? 'NEW_USER (just started this week — low data is totally normal, focus on encouragement and momentum)'
     : totalDaysActive === 0
@@ -79,6 +87,14 @@ async function getInsights(
       : totalDaysActive >= 5
         ? 'ACTIVE_STRONG (checked in 5-7 days — acknowledge it, push them a little further)'
         : 'ACTIVE_PARTIAL (checked in 2-4 days — honest about the gap, warm about what they did do)'
+
+  const orbitContext = allOrbits.map(o => {
+    const stat = validStats.find(s => s.orbit.id === o.id)
+    if (stat) {
+      return `  - "${o.name}" (${o.icon}): ${stat.completionPct}% this week, ${stat.daysActive}/7 days active`
+    }
+    return `  - "${o.name}" (${o.icon}): no check-ins this week`
+  }).join('\n')
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -89,16 +105,26 @@ async function getInsights(
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 500,
+      max_tokens: 600,
       system: `You write weekly progress emails for ${userName}, a user of Orbit (a personal habit/life-tracking app).
 
-Tone: warm and direct, like a friend who actually pays attention — not a bot, not a cheerleader, not corporate. Be honest. Reference specific numbers or orbit names when you can. Keep each field SHORT.
+Tone: warm and direct, like a friend who actually pays attention — not a bot, not a cheerleader, not corporate. Be honest. Keep each field SHORT.
 
 User segment: ${segment}
 
+User's orbits and this week's activity:
+${orbitContext}
+
+SUBJECT LINE RULES — read carefully:
+1. First, identify the most life-meaningful orbit from the list. Rank by real-world significance: health, family, relationships, career, fitness > generic/test/placeholder names. Ignore orbits named things like "Test", "test", "demo", "sample", "temp", or anything clearly not a real life goal.
+2. Among meaningful orbits, pick the one that tells the most interesting story: biggest dip, a streak worth calling out, the one that slipped, or the one that needs a push.
+3. Use that orbit name in the subject line — naturally, not forced.
+4. Max 9 words. Sentence case. No generic phrases.
+5. Good examples: "Dad's Health dipped — time to reset", "Fitness streak is alive — don't stop now", "Work at 26% this week — here's what to do", "Morning Routine needs one more day from you".
+
 Return ONLY valid JSON — no markdown, no extra text:
 {
-  "subject": "email subject line, sentence case (capitalize first word), max 9 words, punchy and specific — use actual numbers or orbit names if possible. Examples of good styles: 'You showed up 5 days last week', 'Your streak is real — keep it going', 'One habit slipped. Here is how to fix it', 'Dad's Health is on a 12-day streak'. No generic phrases like 'weekly summary' or 'check in'. Make them want to open it.",
+  "subject": "the subject line following all rules above — orbit name must appear, must feel personal and specific",
   "openingLine": "2 sentences max. Direct observation about their week. Name their best or most active orbit if possible.",
   "winLine": "1 sentence. Specific praise. Call out actual numbers or orbit names.",
   "watchLine": "1 sentence. What slipped or what needs watching. Honest but not harsh.",
@@ -311,6 +337,23 @@ function buildEmail(rawInsights: any, orbitStats: any[], totalDaysActive: number
     </table>
   </td></tr>
 
+  ${totalDaysActive <= 2 ? `
+  <!-- Motivation block for inactive users -->
+  <tr><td style="padding-bottom:24px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;border-radius:14px;padding:20px 22px;">
+      <tr><td>
+        <div style="font-size:22px;margin-bottom:10px;">⚡</div>
+        <div style="font-size:15px;font-weight:700;color:#3730a3;margin-bottom:6px;">30 seconds is all it takes</div>
+        <div style="font-size:13px;color:#4c1d95;line-height:1.65;margin-bottom:14px;">
+          A single tap check-in — done in the time it takes to unlock your phone. That one tap, repeated daily, is how habits become automatic. Not motivation. Not willpower. Just the tap.
+        </div>
+        <div style="font-size:12px;color:#6d28d9;font-style:italic;border-left:3px solid #7c3aed;padding-left:12px;line-height:1.6;">
+          "We are what we repeatedly do. Excellence, then, is not an act but a habit." — Aristotle
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>` : ''}
+
   <!-- Sign off -->
   <tr><td style="border-top:1px solid #f3f4f6;padding-top:16px;">
     <p style="font-size:13px;color:#6b7280;font-style:italic;margin:0 0 8px 0;">${insights.closingLine}</p>
@@ -340,7 +383,7 @@ Deno.serve(async (req) => {
 
     // ?email=xxx → send to that user only
     // No param → hardcoded to marella.karthik@gmail.com until explicitly opened up
-    const ALLOW_BULK = false  // flip to true when ready to send to all users
+    const ALLOW_BULK = false  // flip to true when manually triggering bulk send
     const url = new URL(req.url)
     const targetEmail = url.searchParams.get('email') || (ALLOW_BULK ? null : 'marella.karthik@gmail.com')
 
@@ -411,7 +454,7 @@ Deno.serve(async (req) => {
 
       // Claude call
       await sleep(300)
-      const insights = await getInsights(userName, orbitStats, totalDaysActive, isNewUser, anthropicKey)
+      const insights = await getInsights(userName, orbitStats, orbits, totalDaysActive, isNewUser, anthropicKey)
 
       const emailHtml = buildEmail(insights, orbitStats, totalDaysActive, appUrl)
 
@@ -443,7 +486,7 @@ Deno.serve(async (req) => {
       }
 
       // Rate limiting: only throttle on bulk sends
-      if (!targetEmail && targets.indexOf(user) < targets.length - 1) await sleep(4000)
+      if (!targetEmail && targets.indexOf(user) < targets.length - 1) await sleep(1200)
     }
 
     const sent = results.filter(r => r.status === 'sent').length

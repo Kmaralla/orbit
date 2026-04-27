@@ -40,6 +40,9 @@ export function detectOrbitCategory(orbit) {
 
 const CATEGORY_BASE = { health: 20, family: 18, fitness: 14, career: 12, other: 8 }
 
+// Orbits that are clearly test/placeholder — deprioritize them
+const PLACEHOLDER_WORDS = /^(test|demo|sample|temp|placeholder|dummy|example|trial|foo|bar|abc|xyz|orbit\s*\d*|habit\s*\d*)$/i
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function countActiveDays(entries, startDaysAgo, endDaysAgo, today) {
@@ -112,7 +115,9 @@ export function scoreFocusCandidates(candidates) {
     if (doneToday) continue
 
     const category = detectOrbitCategory(orbit)
-    let score = CATEGORY_BASE[category]
+    // Penalize placeholder/test orbits heavily so real life orbits always surface first
+    const isPlaceholder = PLACEHOLDER_WORDS.test(orbit.name.trim())
+    let score = isPlaceholder ? 1 : CATEGORY_BASE[category]
     let reason = 'maintain'
     let reasonLabel = ''
     let urgency = 'low'

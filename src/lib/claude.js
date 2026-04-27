@@ -133,6 +133,66 @@ Be human, warm, specific. No generic praise. No bullet points. Just 2 natural se
   return data.content?.find(b => b.type === 'text')?.text?.trim() || null
 }
 
+export async function getOrbitSidebarInsight(orbit, items, entries) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+  if (!apiKey) return null
+
+  const totalDays = new Set(entries.map(e => e.date)).size
+  const summary = items.map(item => {
+    const ie = entries.filter(e => e.checklist_item_id === item.id)
+    const done = ie.filter(e => e.value && e.value !== '' && e.value !== 'false')
+    const last7 = done.slice(-7).map(e => e.value).join(', ')
+    const avgVal = (item.value_type === 'score' || item.value_type === 'number')
+      ? (() => { const nums = done.map(e => Number(e.value)).filter(n => !isNaN(n) && n > 0); return nums.length ? Math.round(nums.reduce((a,b) => a+b,0)/nums.length) : null })()
+      : null
+    return `- ${item.label}: checked in ${done.length} times${avgVal !== null ? `, avg ${avgVal}` : ''}${last7 ? `, recent: ${last7}` : ''}`
+  }).join('\n')
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        system: `You are a warm, honest personal coach inside a habit tracking app. You get data about one of the user's habits and write a short sidebar panel.
+
+Return ONLY valid JSON — no markdown, no extra text:
+{
+  "summary": "2-3 sentences. Honest, specific assessment of how they're doing. Reference actual patterns from the data. Not a cheerleader — be real.",
+  "highlight": "One specific thing going well (1 sentence)",
+  "challenge": "One honest gap or area to improve (1 sentence)",
+  "tip": "One concrete, actionable tip for this specific habit — not generic advice",
+  "links": [
+    { "label": "Short link label (max 5 words)", "url": "https://..." },
+    { "label": "Short link label (max 5 words)", "url": "https://..." }
+  ]
+}
+
+For links: provide 2 real, relevant URLs from well-known sources (Wikipedia, NHS, Mayo Clinic, Healthline, Harvard Health, Psychology Today, etc.) that directly relate to the orbit topic. Only include links you're confident exist.`,
+        messages: [{
+          role: 'user',
+          content: `Orbit: "${orbit.name}" ${orbit.icon || ''}${orbit.description ? `\nDescription: ${orbit.description}` : ''}
+Total days tracked: ${totalDays}
+
+Checklist items:\n${summary}\n\nWrite the sidebar insight.`
+        }]
+      })
+    })
+    const data = await res.json()
+    if (data.error) return null
+    const text = data.content?.find(b => b.type === 'text')?.text || '{}'
+    try {
+      return JSON.parse(text.replace(/```json|```/g, '').trim())
+    } catch { return null }
+  } catch { return null }
+}
+
 export async function getOrganizeSuggestions(orbits, completionData) {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
   if (!apiKey) return null
@@ -192,6 +252,47 @@ Respond ONLY with valid JSON:
   try {
     const clean = text.replace(/```json|```/g, '').trim()
     return JSON.parse(clean)
+  } catch {
+    return null
+  }
+}
+
+export async function getFocusNarrative(topFocusItems) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+  if (!apiKey || !topFocusItems?.length) return null
+
+  const lines = topFocusItems.map(f => {
+    const urgency = f.reason === 'protect' ? `streak at risk (${f.streak?.current} days)`
+      : f.reason === 'reengage' ? `dropped off (${f.reasonLabel})`
+      : f.reason === 'dormant'  ? `gone quiet (${f.reasonLabel})`
+      : f.reason === 'begin'    ? 'not started yet'
+      : 'ongoing'
+    return `- "${f.item.label}" in ${f.orbit.icon} ${f.orbit.name} [${urgency}]`
+  }).join('\n')
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        system: `You write a single 1-2 sentence focus nudge for a habit tracking app dashboard.
+Be warm, direct, specific — like a coach who knows them. Reference the actual orbit or task names.
+No bullet points. No generic phrases like "don't forget" or "keep it up".
+If a streak is at risk, lead with that urgency. If something has gone quiet, name it honestly.
+Return plain text only — no JSON, no markdown.`,
+        messages: [{ role: 'user', content: `Today's priority tasks:\n${lines}\n\nWrite the focus nudge.` }]
+      })
+    })
+    const data = await res.json()
+    if (data.error) return null
+    return data.content?.find(b => b.type === 'text')?.text?.trim() || null
   } catch {
     return null
   }

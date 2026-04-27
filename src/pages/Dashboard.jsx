@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { calculateStreak, getStreakDisplay } from '../lib/streaks'
 import { scoreFocusCandidates, buildFocusNarrative } from '../lib/focusEngine'
+import { getFocusNarrative } from '../lib/claude'
 import StreakCelebration, { checkStreakMilestone, markMilestoneSeen } from '../components/StreakCelebration'
 import Navbar from '../components/Navbar'
 import AddUsecase from '../components/AddUsecase'
@@ -190,10 +191,16 @@ export default function Dashboard() {
 
     // Smart focus engine — scores by intent, behavior, momentum, absence
     const smartFocus = scoreFocusCandidates(itemPriorities)
-    const narrative = buildFocusNarrative(smartFocus)
+    // Show rule-based narrative immediately, then upgrade to Claude-generated one async
+    setFocusNarrative(buildFocusNarrative(smartFocus))
     setTopFocus(smartFocus)
-    setFocusNarrative(narrative)
     setLoading(false)
+    // Async Claude upgrade — doesn't block UI
+    if (smartFocus.length > 0) {
+      getFocusNarrative(smartFocus).then(aiNarrative => {
+        if (aiNarrative) setFocusNarrative(aiNarrative)
+      })
+    }
 
     // Load today's plan — DB first (cross-device), fallback to localStorage
     await loadTodayPlan(data || [], allEntries)
