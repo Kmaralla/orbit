@@ -57,6 +57,7 @@ export default function Usecase() {
   const [sidebarLoading, setSidebarLoading] = useState(true)
   const [typewriterText, setTypewriterText] = useState('')
   const [typewriterDone, setTypewriterDone] = useState(false)
+  const isMobile = window.innerWidth < 900
   const [markingAllDone, setMarkingAllDone] = useState(false)
   // Use local date, not UTC — toISOString() shifts to UTC and breaks for users in EST/IST after certain hours
   const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]
@@ -355,8 +356,8 @@ export default function Usecase() {
   const s = {
     page: { minHeight: '100vh', background: colors.bg },
     content: { maxWidth: 1100, margin: '0 auto', padding: '40px 24px' },
-    layout: { display: 'flex', gap: 28, alignItems: 'flex-start' },
-    main: { flex: 1, minWidth: 0 },
+    layout: { display: 'flex', gap: 28, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' },
+    main: { flex: 1, minWidth: 0, width: '100%' },
     back: { background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 14, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Nunito, sans-serif' },
     header: { marginBottom: 36 },
     ucTitle: { fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 800, color: colors.text, letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 },
@@ -853,8 +854,8 @@ export default function Usecase() {
 
         {/* AI Insight Sidebar */}
         <div style={{
-          width: 300, flexShrink: 0,
-          position: 'sticky', top: 80, alignSelf: 'flex-start',
+          width: isMobile ? '100%' : 300, flexShrink: 0,
+          position: isMobile ? 'relative' : 'sticky', top: 80, alignSelf: 'flex-start',
           background: colors.bgCard,
           border: `1px solid ${colors.border}`,
           borderRadius: 20,
