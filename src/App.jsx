@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider, useTheme } from './hooks/useTheme'
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Usecase from './pages/Usecase'
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/checkin/:token" element={<GuestCheckin />} />
             <Route path="/side-quests" element={<ProtectedRoute><SideQuests /></ProtectedRoute>} />
           </Routes>
+          <VercelAnalytics />
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
